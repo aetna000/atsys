@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-10-23T22:28:53.788764+00:00",
+  "distribution": "atsys==0.2.0 from PyPI",
+  "taskId": "task-f7997570-3907-47c3-b3fe-b893af979944",
+  "scenario": "Implement a duration parser in an isolated Git repository using a real Codex worker",
+  "fixtureOnly": true,
+  "baselineAcceptanceFailed": true,
+  "status": "completed",
+  "setupProcessExitedBeforeWorkerCompleted": true,
+  "watchdogHealthVerifiedBeforeSubmission": true,
+  "testGroupsPassed": 5,
+  "unrelatedEditUnchanged": true,
+  "acceptanceTestFileUnchanged": true,
+  "configuredRecovery": {
+    "recovery": "supervised",
+    "maxRetries": 2,
+    "allowRepair": true,
+    "timeoutSeconds": 180,
+    "taskTimeoutSeconds": 600,
+    "heartbeatTimeoutSeconds": 15,
+    "activityTimeoutSeconds": 120
+  },
+  "recoveryExercised": false,
+  "attempts": [
+    {
+      "phase": "worker",
+      "status": "succeeded",
+      "startedAt": "2026-10-23T22:27:26.196Z",
+      "endedAt": "2026-10-23T22:27:49.298Z",
+      "exitCode": 0,
+      "validation": {
+        "passed": true,
+        "detail": "Worker exited zero; independent validation pending."
+      }
+    },
+    {
+      "phase": "validator",
+      "status": "succeeded",
+      "startedAt": "2026-10-23T22:27:50.221Z",
+      "endedAt": "2026-10-23T22:27:50.754Z",
+      "exitCode": 0,
+      "validation": {
+        "passed": true,
+        "detail": "Independent validation command exited zero.",
+        "artifacts": [
+          {
+            "path": "duration.py",
+            "digest": "15e65a283b18ae18c84986cf6e93ba0d23c6ec577373306e5ca6ff3fb726899d"
+          }
+        ]
+      }
+    }
+  ],
+  "cleanup": {
+    "testAPIStopped": true,
+    "testLaunchAgentRemoved": true,
+    "testDetachedWatchdogStopped": true,
+    "processExitVerified": true
+  },
+  "limits": [
+    "Short coding acceptance run; no multi-hour soak, machine reboot/sleep or real Telegram delivery was exercised.",
+    "Recovery settings were configured but not invoked by this successful task; recovery has separate existing evidence."
+  ]
+}

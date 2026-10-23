@@ -2,6 +2,8 @@
 
 AtSys supervises general coding tasks. The first console milestone and the second operational milestone are documented separately; current implementation is described in [the verification report](IMPLEMENTATION.md).
 
+**Current priority: [testing and qualification](TESTING.md).** Codex plugin packaging and official directory submission are [saved as a deferred TODO](todos/codex-plugin.md).
+
 1. **Reuse a mature orchestration backend for production scope.** Prototype Windmill and Temporal against the same crash/stall/recovery acceptance cases before adding distributed scheduling. See [build versus reuse](BUILD-VS-REUSE.md).
 2. **Broader coding-provider support.** Add supported Claude/Copilot/etc. adapters; native resumable sessions, interactive hooks, live steering and normalized usage. Current native execution supports Codex exec plus arbitrary trusted commands.
 3. **Stronger execution isolation and recovery.** Per-task worktrees/containers, reviewed diffs/rollback, application-specific side-effect reconciliation and recovery plugins. The current generic command runner is local-user execution, not a sandbox.

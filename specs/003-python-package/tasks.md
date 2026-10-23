@@ -1,0 +1,7 @@
+- [x] Package-independent runtime paths and subprocess entry points
+- [x] Bundled backend, UI, notices and build metadata
+- [x] Python wheel/sdist metadata and installed CLI
+- [x] Project initialization and packaged Codex integration
+- [x] Installed task template/schema and dashboard lifecycle
+- [x] Clean-environment wheel and runtime acceptance tests
+- [x] Document install/use/release workflow and verification

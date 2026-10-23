@@ -1,0 +1,5 @@
+include pyproject.toml setup.py python/README.md
+recursive-include python/atsys *.py
+recursive-include python/atsys/resources *
+recursive-include python/atsys/_runtime *
+global-exclude __pycache__ *.py[cod] .DS_Store .env .env.*

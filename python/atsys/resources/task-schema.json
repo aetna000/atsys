@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 6000
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "worker": {
+      "type": "string",
+      "enum": [
+        "command",
+        "codex"
+      ]
+    },
+    "argv": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 8000
+      }
+    },
+    "resumeArgv": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 8000
+      }
+    },
+    "model": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "reasoningEffort": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "validator": {
+      "type": "string",
+      "enum": [
+        "exit-code",
+        "command",
+        "benchmark-json"
+      ]
+    },
+    "validationArgv": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 8000
+      }
+    },
+    "validationTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "requiredArtifacts": {
+      "maxItems": 30,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "activityTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400
+    },
+    "plan": {
+      "type": "string",
+      "maxLength": 12000
+    },
+    "artifact": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "progressFile": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 604800
+    },
+    "taskTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2592000
+    },
+    "heartbeatTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 300
+    },
+    "progressTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400
+    },
+    "recovery": {
+      "type": "string",
+      "enum": [
+        "notify",
+        "restart",
+        "supervised"
+      ]
+    },
+    "maxRetries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "backoffSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600
+    },
+    "supervisorModel": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "supervisorEffort": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "supervisorTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 3600
+    },
+    "maxSupervisorCalls": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "allowRepair": {
+      "type": "boolean"
+    },
+    "repairTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 7200
+    }
+  },
+  "required": [
+    "name",
+    "objective",
+    "cwd",
+    "worker",
+    "argv",
+    "resumeArgv",
+    "model",
+    "reasoningEffort",
+    "validator",
+    "validationArgv",
+    "validationTimeoutSeconds",
+    "requiredArtifacts",
+    "activityTimeoutSeconds",
+    "plan",
+    "artifact",
+    "progressFile",
+    "timeoutSeconds",
+    "taskTimeoutSeconds",
+    "heartbeatTimeoutSeconds",
+    "progressTimeoutSeconds",
+    "recovery",
+    "maxRetries",
+    "backoffSeconds",
+    "supervisorModel",
+    "supervisorEffort",
+    "supervisorTimeoutSeconds",
+    "maxSupervisorCalls",
+    "allowRepair",
+    "repairTimeoutSeconds"
+  ],
+  "additionalProperties": false
+}

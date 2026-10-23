@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atsys"
+version = "0.2.0"
+description = "Durable coding-task supervision with Codex integration and a local web dashboard"
+readme = "python/README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["nodejs-wheel-binaries>=24,<25"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Software Development",
+]
+
+[project.scripts]
+atsys = "atsys.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/aetna000/atsys"
+Repository = "https://github.com/aetna000/atsys"
+Issues = "https://github.com/aetna000/atsys/issues"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["atsys*"]

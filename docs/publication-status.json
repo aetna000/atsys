@@ -1,0 +1,16 @@
+{
+  "package": "atsys",
+  "version": "0.2.0",
+  "registry": "https://pypi.org",
+  "attemptedAt": "2026-10-23T21:41:04.576189+00:00",
+  "published": false,
+  "uploadStatus": 403,
+  "reason": "Invalid or non-existent authentication information",
+  "releaseLookupStatus": 404,
+  "publishingMechanism": "GitHub Actions OIDC, matching AtMem",
+  "localTokensMatch": true,
+  "workflowPrepared": ".github/workflows/workflows.yml",
+  "githubRepository": "aetna000/atsys",
+  "remoteWorkflowPresent": false,
+  "pypiPublisherRegistration": "not verified; account access required"
+}

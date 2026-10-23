@@ -1,0 +1,38 @@
+{
+  "package": "atsys",
+  "version": "0.2.0",
+  "platform": "macOS arm64",
+  "artifacts": [
+    {
+      "file": "atsys-0.2.0-py3-none-any.whl",
+      "bytes": 1021184,
+      "sha256": "63f4139dba1314e055e7530336480a77e3b1eac78527f18a5e9e417dbf952e01"
+    },
+    {
+      "file": "atsys-0.2.0.tar.gz",
+      "bytes": 1009386,
+      "sha256": "fec5d62e4f78d9353a99e7cda0423d7f4732ce678228fbe2a0e6c4e8700dc7ea"
+    }
+  ],
+  "archiveChecks": {
+    "noCheckoutPaths": true,
+    "noRuntimeState": true,
+    "includesBundledRuntimeAndDashboard": true
+  },
+  "checks": {
+    "backendTests": 30,
+    "desktopMobileBrowserTests": 18,
+    "installedWheelTests": 5,
+    "watchdogKillAndLaunchdRestart": "passed",
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "format": "passed",
+    "twine": "passed",
+    "codexSkillValidation": "passed"
+  },
+  "published": false,
+  "limitations": [
+    "Linux execution not verified on this macOS host",
+    "No new paid-model task was launched for packaging tests; native Codex verification is recorded separately"
+  ]
+}

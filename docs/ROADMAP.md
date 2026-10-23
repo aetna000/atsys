@@ -9,7 +9,7 @@ AtSys supervises general coding tasks. The first console milestone and the secon
 5. **Workflow plans.** Persisted dependency graphs, multiple specialized workers, dynamic task decomposition, approval gates for individual external actions, and reusable coding-task templates. Today one objective can run through Codex or an arbitrary script, with separate supervision and acceptance checks.
 6. **Models and money.** Native usage capture, token budgets, enforced monetary budgets and dated pricing provenance. Current time/attempt/call limits are enforced; costs remain unknown.
 7. **Companions.** AtMem governed retrieval, AtFlows telemetry and AtBot assistance remain separate opt-in integrations. Their sample UI does not imply a live connector.
-8. **Distribution and access.** Registry publication, Linux service installation, authenticated remote access and teams. A Python wheel/sdist now includes the runtime, dashboard and Codex onboarding skill; see [packaging](PACKAGING.md). Current built-in OS supervision is a per-user macOS LaunchAgent; HTTP is local-only.
+8. **Distribution and access.** Linux service installation, authenticated remote access and teams. Version 0.2.0 is published on PyPI with the runtime, dashboard and Codex onboarding skill; see [packaging](PACKAGING.md). Current built-in OS supervision is a per-user macOS LaunchAgent; HTTP is local-only.
 9. **Alert operations.** Quiet hours, routing by task/severity, external always-on dead-man monitoring and additional transports. Telegram outbound delivery, durable retries and outcomes exist now; incoming messages cannot authorize actions.
 
 No feature above is claimed complete by the sample console, by a provider executable being on PATH, or by a passing mock-provider contract test.

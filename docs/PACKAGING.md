@@ -2,7 +2,17 @@
 
 The 0.2.0 wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
 
-## Use the local release
+## Install the published release
+
+```sh
+python -m pip install --upgrade atsys==0.2.0
+cd /path/to/your/project
+atsys init
+```
+
+Version 0.2.0 is published on [PyPI](https://pypi.org/project/atsys/0.2.0/). Its [release workflow](https://github.com/aetna000/atsys/actions/runs/40031931023) passed all checks and uploaded through Trusted Publishing. [GitHub release assets](https://github.com/aetna000/atsys/releases/tag/v0.2.0) contain the same wheel and source distribution. Registry SHA-256 hashes match the tested CI artifacts.
+
+## Use a downloaded or locally built release
 
 ```sh
 pip install /absolute/path/to/release/atsys-0.2.0-py3-none-any.whl
@@ -32,7 +42,7 @@ Templates intentionally leave the independent validation command empty: a placeh
 
 Installed state defaults to `~/.local/share/atsys`, or `$XDG_DATA_HOME/atsys`; `ATSYS_DATA_DIR` overrides it. Dashboard health carries a hash identifying this directory. Startup reuses a matching instance or chooses a free port in 4310–4330. `atsys ui --port PORT` chooses an explicit port. Submission links use the persisted dashboard endpoint. The development dashboard at port 5173 is not needed by pip users.
 
-The wheel bundles JavaScript dependencies and web assets, plus schema, defaults, example, skill and license notices. `nodejs-wheel-binaries>=24,<25` supplies Node as a Python dependency. Codex and project-specific test/build tools remain external prerequisites. Runtime supports macOS/Linux; built-in durable OS service installation currently supports macOS. Linux starts a detached watchdog and requires its own service-manager setup for restart protection. Windows supervision is unsupported. Actual Linux execution is not verified by the macOS checks below.
+The wheel bundles JavaScript dependencies and web assets, plus schema, defaults, example, skill and license notices. `nodejs-wheel-binaries>=24,<25` supplies Node as a Python dependency. Codex and project-specific test/build tools remain external prerequisites. Runtime supports macOS/Linux; built-in durable OS service installation currently supports macOS. Linux starts a detached watchdog and requires its own service-manager setup for restart protection. Windows supervision is unsupported. Linux runtime, browser and installed-package checks passed in the release workflow; macOS checks include actual LaunchAgent recovery.
 
 The Python installation must remain present while its service/tasks run. Before moving or removing its environment, stop its tasks and remove its service; install the service again from the replacement environment. Use a consistent data directory to retain history. `service uninstall` removes OS restart protection but deliberately leaves a detached watchdog; it does not cancel existing work.
 
@@ -55,9 +65,9 @@ python -m venv /tmp/atsys-wheel-test
 
 Acceptance checks run the installed package from isolated Git workspaces with spaces in their paths. They exercise bundled runtime discovery, skill installation/conflict preservation/removal, dashboard identity, real command execution with separate validation/artifact evidence, and (on macOS) LaunchAgent startup/recovery after killing the watchdog. Tests remove their own services and processes. They do not launch a paid model.
 
-Verified on macOS: 30 runtime tests, 18 desktop/mobile browser checks and five installed-wheel checks passed, along with type checking, production build, formatting, package metadata checks and skill validation. [The verification record](packaging-verification.json) includes artifact sizes and SHA-256 digests. Native Codex execution was verified separately in [the operational milestone](native-codex-verification.json).
+Verified: 31 runtime tests, 18 desktop/mobile browser checks and five installed-wheel checks on macOS (four on Linux, with the macOS-only LaunchAgent check skipped), along with type checking, production build, formatting, package metadata checks and skill validation. [The verification record](packaging-verification.json) includes published artifact sizes and SHA-256 digests. Native Codex execution was verified separately in [the operational milestone](native-codex-verification.json).
 
-Publication is separate: the artifact is locally built, not uploaded to PyPI. No package ownership or registry availability is assumed. The short `pip install atsys` instruction applies once this version is published to the intended registry.
+Publication is gated by `.github/workflows/workflows.yml`: manual dispatch verifies a candidate, while a matching version tag publishes only after the checks pass. Never move a published tag or overwrite release artifacts.
 
 ## Trusted Publishing configuration
 
@@ -65,7 +75,7 @@ AtMem's actual publisher in `aetnamem/.github/workflows/publish.yml` uses GitHub
 
 The matching AtSys workflow is `.github/workflows/workflows.yml`. A manual run builds/tests only; a version tag publishes the tested artifacts. It runs application checks, browser tests and clean installed-wheel checks before granting the separate publishing job an OIDC identity. The macOS LaunchAgent check remains locally verified and is skipped on the Linux runner.
 
-The existing GitHub repository is `aetna000/atsys`. At inspection it contained only `LICENSE`, with no Actions workflows or environments. To activate publication, preserve its existing history/license when adding the source and workflow, create the GitHub environment `pypi`, and configure the PyPI trusted publisher with:
+The GitHub repository is `aetna000/atsys`. Its initial history and Apache-2.0 license were preserved when the source and workflow were added. Publication succeeded using the following trusted-publisher identity:
 
 | Field | Value |
 | --- | --- |
@@ -75,4 +85,4 @@ The existing GitHub repository is `aetna000/atsys`. At inspection it contained o
 | Workflow filename | `workflows.yml` |
 | Environment | `pypi` |
 
-For a project that does not exist yet, use a pending publisher in the PyPI account's publishing settings. Registration must be verified in the account; a public registry 404 cannot determine whether a pending publisher exists. Push a matching release tag only after registration and checks are ready, then verify the workflow, published digests and a clean registry installation. No replacement static API token is needed for this path. See [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
+For a new project, a pending publisher can be registered in the PyPI account's publishing settings. AtSys's registration was confirmed operationally by the successful OIDC upload. Future releases should verify the workflow, published digests and a clean registry installation. No static API token is needed for this path. See [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/).

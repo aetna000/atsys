@@ -1,16 +1,32 @@
 {
   "package": "atsys",
   "version": "0.2.0",
-  "registry": "https://pypi.org",
-  "attemptedAt": "2026-10-23T21:41:04.576189+00:00",
-  "published": false,
-  "uploadStatus": 403,
-  "reason": "Invalid or non-existent authentication information",
-  "releaseLookupStatus": 404,
-  "publishingMechanism": "GitHub Actions OIDC, matching AtMem",
-  "localTokensMatch": true,
-  "workflowPrepared": ".github/workflows/workflows.yml",
-  "githubRepository": "aetna000/atsys",
-  "remoteWorkflowPresent": false,
-  "pypiPublisherRegistration": "not verified; account access required"
+  "published": true,
+  "files": [
+    {
+      "file": "atsys-0.2.0-py3-none-any.whl",
+      "sha256": "4f73abb653a86541290768af1534db9aa1f3481b5622e598ec543f8d086f6d46",
+      "registryDigestMatches": true
+    },
+    {
+      "file": "atsys-0.2.0.tar.gz",
+      "sha256": "f2bbbfd76fc2a91aa7d0e8323e03ad9825d55ee96c45accf0cd029ae1b20cfbc",
+      "registryDigestMatches": true
+    }
+  ],
+  "workflow": "https://github.com/aetna000/atsys/actions/runs/40031931023",
+  "publishedAt": "2026-10-23T22:16:05.271736+00:00",
+  "tag": "v0.2.0",
+  "commit": "15016d6e40f4c912b2a3442fe0fc9449e771bf69",
+  "mechanism": "GitHub Actions OIDC Trusted Publishing",
+  "workflowFile": ".github/workflows/workflows.yml",
+  "pypi": "https://pypi.org/project/atsys/0.2.0/",
+  "release": "https://github.com/aetna000/atsys/releases/tag/v0.2.0",
+  "cleanRegistryInstall": "passed",
+  "dependencyCheck": "passed",
+  "installedPackageTests": {
+    "passed": 5,
+    "platform": "macOS-26.5.2-x86_64-i386-64bit"
+  },
+  "localCommandVersion": "0.2.0"
 }

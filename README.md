@@ -8,10 +8,10 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 
 ## Start
 
-Install the locally built Python release (Python 3.10+):
+Install the Python release (Python 3.10+):
 
 ```sh
-pip install /path/to/atsys/release/atsys-0.2.0-py3-none-any.whl
+python -m pip install --upgrade atsys
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. The 0.2.0 artifacts are built locally; this change has **not** been published to PyPI. After publication the installation command becomes `pip install atsys`. See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. Version 0.2.0 is available on [PyPI](https://pypi.org/project/atsys/0.2.0/) and as a [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.2.0). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## Develop AtSys from source
 

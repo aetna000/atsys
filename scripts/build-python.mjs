@@ -90,7 +90,7 @@ writeFileSync(
   join(output, 'build.json'),
   JSON.stringify(
     {
-      version: '0.2.0',
+      version: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
       node: '24.x',
       entries: ['cli.mjs', 'index.mjs', 'daemon.mjs', 'attempt-runner.mjs'],
     },

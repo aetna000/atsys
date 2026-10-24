@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, mkdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  statSync,
+  mkdirSync,
+  existsSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { OperationsStore, stamp } from '../server/operations/store.js';
@@ -41,10 +49,12 @@ async function fixture(
     );
   const until = async (id: string, p: (t: ManagedTask) => boolean, timeout = 15000) => {
     const start = Date.now();
-    while (Date.now() - start < timeout) {
+    while (true) {
       watchdog.tick();
       const t = store.read().tasks.find((t) => t.id === id)!;
       if (p(t)) return t;
+      // Reconcile once after a sleeping laptop wakes before declaring timeout.
+      if (Date.now() - start >= timeout) break;
       await pause(100);
     }
     throw new Error('Timed out: ' + JSON.stringify(store.read().tasks.find((t) => t.id === id)));
@@ -312,4 +322,129 @@ test('missing required artifacts and no-output stalls cannot claim completion', 
     });
     const s = await until(silent.id, (t) => t.status === 'needs_attention');
     assert.match(s.attentionReason!, /Activity stalled/);
+  }));
+
+test('operator retry after stop starts a worker, not a supervisor for the interrupted attempt', async () =>
+  fixture(async ({ submit, until, store, root }) => {
+    // Supervised setup requires an executable, but this scenario must never invoke
+    // a supervisor. Do not depend on (or accidentally call) the operator's Codex.
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!${process.execPath}\nrequire('fs').writeFileSync('unexpected-supervisor','called');process.exit(97);`,
+      { mode: 0o700 },
+    );
+    const old = process.env.PATH;
+    process.env.PATH = bin + ':' + (old ?? '');
+    try {
+      const task = submit({
+        argv: [
+          process.execPath,
+          '-e',
+          `if(!require('fs').existsSync('ready'))setInterval(()=>{},1000)`,
+        ],
+        recovery: 'supervised',
+      });
+      await until(task.id, (t) => t.attempts[0]?.status === 'running');
+      changeTask(store, task.id, 'stop');
+      await until(task.id, (t) => t.status === 'stopped');
+      writeFileSync(join(root, 'ready'), 'yes');
+      changeTask(store, task.id, 'retry');
+      const done = await until(task.id, (t) => t.status === 'completed');
+      assert.deepEqual(
+        done.attempts.map((a) => a.phase),
+        ['worker', 'worker'],
+      );
+      assert.equal(existsSync(join(root, 'unexpected-supervisor')), false);
+    } finally {
+      if (old === undefined) delete process.env.PATH;
+      else process.env.PATH = old;
+    }
+  }));
+
+test('unsupported escalation gets bounded diagnostic follow-up and recovery guidance reaches Codex worker', async () =>
+  fixture(async ({ root, submit, until }) => {
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!${process.execPath}\nconst fs=require('fs');const a=process.argv.slice(2);let p='';process.stdin.on('data',x=>p+=x);process.stdin.on('end',()=>{const out=a[a.indexOf('--output-last-message')+1];if(a.includes('--output-schema')){let n=fs.existsSync('diagnoses')?Number(fs.readFileSync('diagnoses')):0;fs.writeFileSync('diagnoses',String(n+1));fs.writeFileSync(out,JSON.stringify(n===0?{action:'escalate',reason:'empty argv',instructions:''}:{action:'restart',reason:'Codex supports objective execution',instructions:'CREATE_THE_VERIFIED_RESULT'}));}else if(p.includes('CREATE_THE_VERIFIED_RESULT')){fs.writeFileSync('result.txt','verified');}else{process.exitCode=1;}});`,
+      { mode: 0o700 },
+    );
+    const old = process.env.PATH;
+    process.env.PATH = bin + ':' + old;
+    try {
+      const task = submit({
+        worker: 'codex',
+        argv: [],
+        recovery: 'supervised',
+        maxSupervisorCalls: 2,
+        maxRetries: 1,
+        validator: 'command',
+        validationArgv: [
+          process.execPath,
+          '-e',
+          `process.exit(require('fs').readFileSync('result.txt','utf8')==='verified'?0:1)`,
+        ],
+      });
+      const done = await until(task.id, (t) => t.status === 'completed');
+      assert.deepEqual(
+        done.attempts.map((a) => a.phase),
+        ['worker', 'supervisor', 'supervisor', 'worker', 'validator'],
+      );
+      assert.ok(done.events.some((e) => e.type === 'escalation.unsubstantiated'));
+      assert.ok(done.events.some((e) => e.type === 'setup.checked'));
+      assert.ok(done.events.some((e) => e.type === 'goal.checked'));
+    } finally {
+      process.env.PATH = old;
+    }
+  }));
+
+test('specific external blocker escalates without unsafe replay', async () =>
+  fixture(async ({ root, submit, until }) => {
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!${process.execPath}\nconst fs=require('fs');const a=process.argv.slice(2);process.stdin.resume();process.stdin.on('end',()=>fs.writeFileSync(a[a.indexOf('--output-last-message')+1],JSON.stringify({action:'escalate',reason:'Required private data unavailable',instructions:'Do not replay',blocker:{kind:'external_dependency',evidence:['mount receipt: required disk absent'],attemptedRemedies:['Checked local copies and authorized archive'],requiredResolution:'Reconnect source disk'}})));`,
+      { mode: 0o700 },
+    );
+    const old = process.env.PATH;
+    process.env.PATH = bin + ':' + old;
+    try {
+      const task = submit({
+        argv: [process.execPath, '-e', 'process.exit(1)'],
+        recovery: 'supervised',
+        allowRepair: true,
+      });
+      const t = await until(task.id, (t) => t.status === 'needs_attention');
+      assert.deepEqual(
+        t.attempts.map((a) => a.phase),
+        ['worker', 'supervisor'],
+      );
+      assert.match(t.attentionReason!, /Reconnect source disk/);
+    } finally {
+      process.env.PATH = old;
+    }
+  }));
+
+test('final progress is persisted even when a worker exits before the next heartbeat tick', async () =>
+  fixture(async ({ submit, until }) => {
+    const t = submit({
+      argv: [
+        process.execPath,
+        '-e',
+        `require('fs').writeFileSync('progress.json',JSON.stringify({completed:20,total:20,checkpoint:'All records saved'}))`,
+      ],
+      progressFile: 'progress.json',
+      validator: 'command',
+      validationArgv: [
+        process.execPath,
+        '-e',
+        `process.exit(JSON.parse(require('fs').readFileSync('progress.json')).completed===20?0:1)`,
+      ],
+    });
+    const done = await until(t.id, (t) => t.status === 'completed');
+    assert.equal(done.attempts.find((a) => a.phase === 'worker')?.progress?.completed, 20);
   }));

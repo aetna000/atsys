@@ -1,23 +1,23 @@
 # Python installation and Codex onboarding
 
-The 0.2.0 wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
+The 0.2.1 wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
 
 ## Install the published release
 
 ```sh
-python -m pip install --upgrade atsys==0.2.0
+python -m pip install --upgrade atsys==0.2.1
 cd /path/to/your/project
 atsys init
 ```
 
-Version 0.2.0 is published on [PyPI](https://pypi.org/project/atsys/0.2.0/). Its [release workflow](https://github.com/aetna000/atsys/actions/runs/40031931023) passed all checks and uploaded through Trusted Publishing. [GitHub release assets](https://github.com/aetna000/atsys/releases/tag/v0.2.0) contain the same wheel and source distribution. Registry SHA-256 hashes match the tested CI artifacts.
+See [0.2.1 release notes](releases/v0.2.1.md), [PyPI](https://pypi.org/project/atsys/0.2.1/) and [GitHub release assets](https://github.com/aetna000/atsys/releases/tag/v0.2.1). Publication is complete only after the tag workflow and registry checks succeed. The historical [0.2.0 workflow](https://github.com/aetna000/atsys/actions/runs/40031931023) established the Trusted Publishing setup; its recorded artifact hashes apply only to that older release.
 
 ## Use a downloaded or locally built release
 
 ```sh
-pip install /absolute/path/to/release/atsys-0.2.0-py3-none-any.whl
+pip install /absolute/path/to/release/atsys-0.2.1-py3-none-any.whl
 # Alternatively, isolate the command with pipx or uv:
-uv tool install /absolute/path/to/release/atsys-0.2.0-py3-none-any.whl
+uv tool install /absolute/path/to/release/atsys-0.2.1-py3-none-any.whl
 cd /path/to/existing/git/repository
 atsys init
 ```
@@ -57,7 +57,7 @@ python -m pip install build twine
 python -m build --outdir release
 python -m twine check release/*
 python -m venv /tmp/atsys-wheel-test
-/tmp/atsys-wheel-test/bin/pip install release/atsys-0.2.0-py3-none-any.whl
+/tmp/atsys-wheel-test/bin/pip install release/atsys-0.2.1-py3-none-any.whl
 /tmp/atsys-wheel-test/bin/python tests/packaging/test_install.py -v
 ```
 
@@ -65,7 +65,7 @@ python -m venv /tmp/atsys-wheel-test
 
 Acceptance checks run the installed package from isolated Git workspaces with spaces in their paths. They exercise bundled runtime discovery, skill installation/conflict preservation/removal, dashboard identity, real command execution with separate validation/artifact evidence, and (on macOS) LaunchAgent startup/recovery after killing the watchdog. Tests remove their own services and processes. They do not launch a paid model.
 
-Verified: 31 runtime tests, 18 desktop/mobile browser checks and five installed-wheel checks on macOS (four on Linux, with the macOS-only LaunchAgent check skipped), along with type checking, production build, formatting, package metadata checks and skill validation. [The verification record](packaging-verification.json) includes published artifact sizes and SHA-256 digests. Native Codex execution was verified separately in [the operational milestone](native-codex-verification.json).
+Historical 0.2.0 verification covered 31 runtime tests, 18 desktop/mobile browser checks and five installed-wheel checks on macOS (four on Linux, with the macOS-only LaunchAgent check skipped). [That verification record](packaging-verification.json) contains the older release's artifact sizes and SHA-256 digests. For the new recovery/monitoring checks, see [the usability and native controlled-recovery review](USABILITY-20261024.md) and the 0.2.1 release workflow. Native Codex execution was also verified in [the operational milestone](native-codex-verification.json).
 
 Publication is gated by `.github/workflows/workflows.yml`: manual dispatch verifies a candidate, while a matching version tag publishes only after the checks pass. Never move a published tag or overwrite release artifacts.
 

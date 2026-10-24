@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { OperationsStore, stamp, taskEvent } from './store.js';
 import { inside } from './config.js';
-import { codexInvocation, proposalSchema, repairSchema } from './codex.js';
+import { codexInvocation, proposalParser, proposalSchema, repairSchema } from './codex.js';
 import { redact, validateResult } from '../control-plane.js';
 import type { Attempt } from '../../shared/operations.js';
 
@@ -88,13 +88,40 @@ let exitCode: number | null = null;
 let output = '';
 const buffers = { stdout: '', stderr: '' };
 let lastProgressText = '';
+const seenProgress = new Set<string>();
 let progress = attempt.progress;
 let lastProgressAt = attempt.startedAt;
 let lastActivityAt = attempt.startedAt;
+function readProgress() {
+  const p = z
+    .object({
+      completed: z.number().nonnegative(),
+      total: z.number().positive(),
+      checkpoint: z.string().max(2000).optional(),
+    })
+    .passthrough()
+    .parse(JSON.parse(safeFile(c.progressFile, 64000).data));
+  if (p.completed > p.total) throw new Error('Progress exceeds total');
+  return { completed: p.completed, total: p.total, checkpoint: p.checkpoint };
+}
+function captureProgress() {
+  const p = readProgress();
+  if (progress && (p.completed < progress.completed || p.total !== progress.total))
+    throw new Error('Progress must not regress or move the goal');
+  const signal = JSON.stringify([p.completed, p.total, p.checkpoint]);
+  if (signal !== lastProgressText && !seenProgress.has(signal)) {
+    seenProgress.add(signal);
+    lastProgressText = signal;
+    lastProgressAt = stamp();
+    progress = p;
+  }
+}
 try {
-  if (c.progressFile) {
-    const p = JSON.parse(safeFile(c.progressFile, 64000).data);
+  if (c.progressFile && attempt.phase === 'worker') {
+    const p = readProgress();
     lastProgressText = JSON.stringify([p.completed, p.total, p.checkpoint]);
+    seenProgress.add(lastProgressText);
+    progress = p; // Show the restored checkpoint without pretending it is new progress.
   }
 } catch {
   /* optional source not created yet */
@@ -144,6 +171,13 @@ function finish() {
   if (finished) return;
   finished = true;
   clearInterval(timer);
+  if (c.progressFile && attempt.phase === 'worker') {
+    try {
+      captureProgress();
+    } catch {
+      /* Retain last valid report; never infer completion. */
+    }
+  }
   for (const value of Object.values(buffers)) if (value) append(value);
   let validation: Attempt['validation'];
   let proposal: Attempt['proposal'];
@@ -155,15 +189,7 @@ function finish() {
         if (!existsSync(resultPath) || statSync(resultPath).size > 64000)
           throw new Error('Missing or oversized structured response');
         const result = JSON.parse(readFileSync(resultPath, 'utf8'));
-        if (attempt.phase === 'supervisor')
-          proposal = z
-            .object({
-              action: z.enum(['restart', 'repair', 'escalate']),
-              reason: z.string().max(8000),
-              instructions: z.string().max(16000),
-            })
-            .strict()
-            .parse(result);
+        if (attempt.phase === 'supervisor') proposal = proposalParser.parse(result);
         else {
           repairResult = z
             .object({ fixed: z.boolean(), summary: z.string().max(16000) })
@@ -177,6 +203,14 @@ function finish() {
             ...proposal,
             reason: redact(proposal.reason),
             instructions: redact(proposal.instructions),
+            blocker: proposal.blocker
+              ? {
+                  ...proposal.blocker,
+                  evidence: proposal.blocker.evidence.map(redact),
+                  attemptedRemedies: proposal.blocker.attemptedRemedies.map(redact),
+                  requiredResolution: redact(proposal.blocker.requiredResolution),
+                }
+              : proposal.blocker,
           };
         if (repairResult) repairResult.summary = redact(repairResult.summary);
       } else if (c.validator !== 'benchmark-json' || attempt.phase === 'validator')
@@ -233,6 +267,9 @@ function finish() {
     a.endedAt = stamp();
     a.heartbeatAt = stamp();
     a.output = output;
+    a.progress = progress;
+    a.lastProgressAt = lastProgressAt;
+    a.lastActivityAt = lastActivityAt;
     a.failure = failure && redact(failure);
     a.exitCode = exitCode;
     a.validation = validation;
@@ -269,22 +306,7 @@ const timer = setInterval(() => {
       return terminate('Activity stalled: no process output within configured window');
     if (c.progressFile && attempt.phase === 'worker') {
       try {
-        const file = safeFile(c.progressFile, 64000);
-        const p = z
-          .object({
-            completed: z.number().nonnegative(),
-            total: z.number().positive(),
-            checkpoint: z.string().max(2000).optional(),
-          })
-          .passthrough()
-          .parse(JSON.parse(file.data));
-        if (p.completed > p.total) throw new Error('Progress exceeds total');
-        const signal = JSON.stringify([p.completed, p.total, p.checkpoint]);
-        if (signal !== lastProgressText) {
-          lastProgressText = signal;
-          lastProgressAt = stamp();
-          progress = { completed: p.completed, total: p.total, checkpoint: p.checkpoint };
-        }
+        captureProgress();
       } catch {
         /* absence/invalid telemetry never advances progress; stall deadline still applies */
       }

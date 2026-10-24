@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, useConsole } from '../api';
+import { readableAttemptLog, shortText, taskPresentation } from '../../shared/task-presentation';
 import { Badge, PageTitle, Panel, Time, Empty } from '../components/common';
 import {
   taskDefaults,
@@ -351,6 +352,7 @@ function TaskDetail({
   configure: () => void;
 }) {
   const a = t.attempts.at(-1);
+  const summary = taskPresentation(t);
   const [attemptId, setAttemptId] = useState('');
   const inspected = t.attempts.find((a) => a.id === attemptId) ?? a;
   return (
@@ -378,7 +380,44 @@ function TaskDetail({
           )
         )}
       </div>
-      {t.attentionReason && <Alert severity="warning">{t.attentionReason}</Alert>}
+      <Panel title="What is happening now" eyebrow="CURRENT TASK · NOT RAW TRANSCRIPTS">
+        <div className="ops-panel-body">
+          <Alert
+            severity={
+              t.status === 'needs_attention'
+                ? 'warning'
+                : t.status === 'completed'
+                  ? 'success'
+                  : 'info'
+            }
+          >
+            <strong>{summary.state}</strong>
+            <p>{shortText(summary.activity, 250)}</p>
+          </Alert>
+          <dl className="ops-facts" style={{ marginTop: 16 }}>
+            <dt>Reported progress</dt>
+            <dd>
+              {summary.progress
+                ? `${summary.progress.completed} / ${summary.progress.total} worker-reported units${summary.progressFromPreviousAttempt ? ' · saved checkpoint' : ''}`
+                : 'No progress reported; no percentage assumed'}
+            </dd>
+            <dt>Latest observer goal check</dt>
+            <dd>
+              {summary.observerAt ? (
+                <>
+                  <Time value={summary.observerAt} /> · {shortText(summary.observerSummary, 170)}
+                </>
+              ) : (
+                'No check recorded yet'
+              )}
+            </dd>
+            <dt>Supervisor</dt>
+            <dd>{shortText(summary.supervisor, 220)}</dd>
+            <dt>Next action</dt>
+            <dd>{shortText(summary.next, 600)}</dd>
+          </dl>
+        </div>
+      </Panel>
       <div className="ops-wiring">
         <Wire
           icon={Terminal}
@@ -399,7 +438,7 @@ function TaskDetail({
           detail={
             t.config.progressTimeoutSeconds
               ? `Progress window ${t.config.progressTimeoutSeconds}s`
-              : 'Progress stall check disabled'
+              : 'Goal progress unmonitored · heartbeat is liveness only'
           }
         />
         <Wire
@@ -428,42 +467,64 @@ function TaskDetail({
       <div className="ops-detail-grid">
         <Panel title="Execution & evidence" action={<Badge value={a?.status ?? 'queued'} />}>
           <div className="ops-panel-body">
-            <dl className="ops-facts">
-              <dt>Workspace</dt>
-              <dd className="mono">{t.config.cwd}</dd>
-              <dt>Execution arguments</dt>
-              <dd className="mono">{JSON.stringify(t.config.argv)}</dd>
-              <dt>Execution plan</dt>
-              <dd>{t.config.plan || 'Worker follows the task objective'}</dd>
-              <dt>Validation command</dt>
-              <dd className="mono">
-                {t.config.validationArgv.length
-                  ? JSON.stringify(t.config.validationArgv)
-                  : 'Not configured'}
-              </dd>
-              <dt>Resume arguments</dt>
-              <dd className="mono">
-                {t.config.resumeArgv.length
-                  ? JSON.stringify(t.config.resumeArgv)
-                  : 'Original command on retry'}
-              </dd>
-              <dt>Attempt / task deadline</dt>
-              <dd>
-                {t.config.timeoutSeconds}s / {t.config.taskTimeoutSeconds}s
-              </dd>
-              <dt>Latest runner heartbeat</dt>
-              <dd>{a ? <Time value={a.heartbeatAt} /> : 'Not started'}</dd>
-              <dt>Progress signal</dt>
-              <dd>
-                {a?.progress
-                  ? `${a.progress.completed} / ${a.progress.total} · ${a.progress.checkpoint ?? 'no checkpoint label'}`
-                  : 'No verified progress yet'}
-              </dd>
-            </dl>
-            {a?.progress && (
+            <details className="ops-disclosure">
+              <summary>Technical configuration and full execution plan</summary>
+              <dl className="ops-facts">
+                <dt>Workspace</dt>
+                <dd className="mono">{t.config.cwd}</dd>
+                <dt>Execution arguments</dt>
+                <dd className="mono">
+                  {t.config.worker === 'codex'
+                    ? 'Codex objective-driven execution (argv not required)'
+                    : JSON.stringify(t.config.argv)}
+                </dd>
+                <dt>Observer check detail</dt>
+                <dd>
+                  {t.events.find((e) => e.type === 'goal.checked')?.message ??
+                    'No goal check recorded yet'}
+                </dd>
+                <dt>Worker network access</dt>
+                <dd>
+                  {t.config.worker === 'command'
+                    ? 'Local commands use local-user permissions'
+                    : t.config.networkAccess
+                      ? 'Authorized for worker and repair'
+                      : 'Disabled in Codex sandbox'}
+                </dd>
+                <dt>Execution plan</dt>
+                <dd>{t.config.plan || 'Worker follows the task objective'}</dd>
+                <dt>Validation command</dt>
+                <dd className="mono">
+                  {t.config.validationArgv.length
+                    ? JSON.stringify(t.config.validationArgv)
+                    : 'Not configured'}
+                </dd>
+                <dt>Resume arguments</dt>
+                <dd className="mono">
+                  {t.config.worker === 'codex'
+                    ? 'Codex objective and recovery instructions'
+                    : t.config.resumeArgv.length
+                      ? JSON.stringify(t.config.resumeArgv)
+                      : 'Original command on retry'}
+                </dd>
+                <dt>Attempt / task deadline</dt>
+                <dd>
+                  {t.config.timeoutSeconds}s / {t.config.taskTimeoutSeconds}s
+                </dd>
+                <dt>Latest runner heartbeat</dt>
+                <dd>{a ? <Time value={a.heartbeatAt} /> : 'Not started'}</dd>
+                <dt>Progress signal</dt>
+                <dd>
+                  {summary.progress
+                    ? `${summary.progress.completed} / ${summary.progress.total} · ${summary.progress.checkpoint ?? 'no checkpoint label'}`
+                    : 'No reported progress yet'}
+                </dd>
+              </dl>
+            </details>
+            {summary.progress && (
               <LinearProgress
                 variant="determinate"
-                value={Math.min(100, (100 * a.progress.completed) / a.progress.total)}
+                value={Math.min(100, (100 * summary.progress.completed) / summary.progress.total)}
               />
             )}
             {a?.validation && (
@@ -501,8 +562,11 @@ function TaskDetail({
             {inspected?.proposal && (
               <Alert severity="info" sx={{ mb: 2 }}>
                 <strong>Supervisor proposal: {inspected.proposal.action}</strong>
-                <p>{inspected.proposal.reason}</p>
-                <p>{inspected.proposal.instructions}</p>
+                <p>{shortText(inspected.proposal.reason, 250)}</p>
+                <details className="ops-disclosure">
+                  <summary>Full recovery instructions</summary>
+                  <p>{inspected.proposal.instructions}</p>
+                </details>
               </Alert>
             )}
             {inspected?.failure && (
@@ -510,17 +574,23 @@ function TaskDetail({
                 {inspected.failure}
               </Alert>
             )}
-            <pre className="ops-output" aria-label="Attempt output">
-              {inspected?.output ||
-                (inspected && !['starting', 'running'].includes(inspected.status)
-                  ? 'This attempt produced no stdout or stderr.'
-                  : 'Output will appear here when the runner starts.')}
+            <pre className="ops-output" aria-label="Readable attempt messages">
+              {inspected ? readableAttemptLog(inspected.output, 6) : 'Worker has not started.'}
             </pre>
+            <details className="ops-disclosure">
+              <summary>Raw provider output (technical JSON)</summary>
+              <pre className="ops-output" aria-label="Attempt output">
+                {inspected?.output ||
+                  (inspected && !['starting', 'running'].includes(inspected.status)
+                    ? 'This attempt produced no stdout or stderr.'
+                    : 'Output will appear here when the runner starts.')}
+              </pre>
+            </details>
           </div>
         </Panel>
         <Panel title="Supervision timeline" eyebrow="PERSISTED EVENTS & POLICY DECISIONS">
           <div className="ops-timeline">
-            {t.events.map((e) => (
+            {t.events.slice(0, 12).map((e) => (
               <div key={e.id}>
                 <span className="ops-timeline-dot" />
                 <div>
@@ -528,10 +598,22 @@ function TaskDetail({
                     {e.role} · <Time value={e.at} />
                   </small>
                   <strong>{e.type.replaceAll('.', ' · ')}</strong>
-                  <p>{e.message}</p>
+                  <p>{shortText(e.message, 220)}</p>
                 </div>
               </div>
             ))}
+            {t.events.length > 12 && (
+              <details className="ops-disclosure">
+                <summary>Older events ({t.events.length - 12})</summary>
+                {t.events.slice(12).map((e) => (
+                  <p key={e.id}>
+                    <Time value={e.at} /> · {e.role} · {e.type}
+                    <br />
+                    {shortText(e.message, 300)}
+                  </p>
+                ))}
+              </details>
+            )}
           </div>
         </Panel>
       </div>
@@ -680,6 +762,16 @@ function TaskForm({
           </AccordionSummary>
           <AccordionDetails>
             <div className="ops-form-grid">
+              <FormControlLabel
+                className="ops-full"
+                control={
+                  <Switch
+                    checked={c.goalMonitoring}
+                    onChange={(_, v) => setC({ ...c, goalMonitoring: v })}
+                  />
+                }
+                label="Default goal-progress monitoring for new Codex tasks"
+              />
               {field(
                 'progressFile',
                 'Progress JSON path',
@@ -701,6 +793,16 @@ function TaskForm({
               {field('heartbeatTimeoutSeconds', 'Runner heartbeat timeout (seconds)', 'number')}
               {field('timeoutSeconds', 'Worker attempt timeout (seconds)', 'number')}
               {field('taskTimeoutSeconds', 'Total task lifetime (seconds)', 'number')}
+              <FormControlLabel
+                className="ops-full"
+                control={
+                  <Switch
+                    checked={c.networkAccess}
+                    onChange={(_, v) => setC({ ...c, networkAccess: v })}
+                  />
+                }
+                label="Authorize network access for Codex worker and bounded repair"
+              />
             </div>
           </AccordionDetails>
         </Accordion>

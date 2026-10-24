@@ -28,6 +28,8 @@ export interface TaskConfig {
   maxSupervisorCalls: number;
   allowRepair: boolean;
   repairTimeoutSeconds: number;
+  networkAccess: boolean;
+  goalMonitoring: boolean;
 }
 export type TaskStatus =
   | 'queued'
@@ -54,6 +56,7 @@ export interface Attempt {
   heartbeatAt: string;
   lastProgressAt: string;
   lastActivityAt?: string;
+  lastObservedAt?: string;
   endedAt?: string;
   exitCode?: number | null;
   failure?: string;
@@ -67,10 +70,21 @@ export interface Attempt {
     artifact?: string;
     artifacts?: { path: string; digest: string }[];
   };
-  proposal?: { action: 'restart' | 'repair' | 'escalate'; reason: string; instructions: string };
+  proposal?: {
+    action: 'restart' | 'repair' | 'escalate';
+    reason: string;
+    instructions: string;
+    blocker?: {
+      kind: 'authorization' | 'resource' | 'external_dependency' | 'safety' | 'budget';
+      evidence: string[];
+      attemptedRemedies: string[];
+      requiredResolution: string;
+    } | null;
+  };
   repairResult?: { fixed: boolean; summary: string };
   handled: boolean;
   cleanupConfirmed?: boolean;
+  cleanupPendingAt?: string;
 }
 export interface ManagedTask {
   id: string;
@@ -155,4 +169,6 @@ export const taskDefaults: TaskConfig = {
   maxSupervisorCalls: 2,
   allowRepair: false,
   repairTimeoutSeconds: 600,
+  networkAccess: false,
+  goalMonitoring: true,
 };

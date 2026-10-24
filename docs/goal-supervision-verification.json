@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-24",
+  "scope": "Local goal-oriented supervision increment, not a published release",
+  "runtime_tests": { "passed": 38, "failed": 0 },
+  "focused_browser_tests": { "passed": 4, "failed": 0, "viewports": ["desktop", "mobile"] },
+  "full_browser_suite": { "passed": 18, "failed": 0, "viewports": ["desktop", "mobile"] },
+  "installed_wheel_tests": {
+    "passed": 6,
+    "failed": 0,
+    "includes": [
+      "setup doctor pilot",
+      "init preservation",
+      "independent task validation",
+      "macOS watchdog restart"
+    ]
+  },
+  "typecheck": "passed",
+  "production_build": "passed",
+  "format_check": "passed",
+  "local_wheel": "release/goal-supervision-local/atsys-0.2.0-py3-none-any.whl",
+  "wheel_sha256": "fd38897caa06a8d813ccce2b28ed3b030af09bbfd7d5df254fb9c957cdcdc65f",
+  "local_install_refreshed": true,
+  "native_worker_check": "Existing benchmark task resumed under refreshed runtime; setup.checked receipt passed, goal-progress JSON observed and worker network requests returned HTTP200.",
+  "benchmark_completion": "Not established by this verification; benchmark acceptance remains separate.",
+  "provider_test_boundary": "Recovery correctness tests use mock Codex CLI contracts with real detached processes; native resumed benchmark worker additionally verifies actual Codex networking and progress transport."
+}

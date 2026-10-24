@@ -39,6 +39,8 @@ export const configSchema = z
     maxSupervisorCalls: z.number().int().min(0).max(10),
     allowRepair: z.boolean(),
     repairTimeoutSeconds: z.number().int().min(5).max(7200),
+    networkAccess: z.boolean().default(false),
+    goalMonitoring: z.boolean().default(true),
   })
   .strict();
 export function inside(root: string, path: string) {

@@ -138,6 +138,9 @@ def dashboard(*, port: int | None = None, open_browser: bool = True) -> str:
             return url
         try:
             with socket.socket() as probe:
+                # Match Node's listener behavior: a just-closed dashboard may leave
+                # TIME_WAIT sockets, which are not another live dashboard instance.
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 probe.bind(("127.0.0.1", candidate))
             selected = candidate
             break
@@ -177,6 +180,9 @@ def initialize(args: list[str]) -> int:
     project = options.project.expanduser().resolve(strict=True)
     if not (project / ".git").exists():
         raise ValueError("Run atsys init inside an existing Git repository (or pass --project).")
+    pilot = backend(["doctor", "--project", str(project)], capture=True)
+    if pilot.returncode:
+        raise RuntimeError("Setup doctor failed before initialization: " + (pilot.stdout.strip() or pilot.stderr.strip()))
     path = project / ".atsys/project.json"
     existing = json.loads(path.read_text()) if path.exists() else None
     if existing and (existing.get("schemaVersion") != 1 or existing.get("root") != str(project)):
@@ -186,7 +192,7 @@ def initialize(args: list[str]) -> int:
     integration = install_integration(project)
     if not existing:
         _private_json(path, {"schemaVersion": 1, "root": str(project), "controlPlaneDataDir": str(data_directory()), "preserveSource": True}, replace=False)
-    result = {"project": str(project), **integration, "dataDirectory": str(data_directory()), "codexInstalled": bool(shutil.which("codex"))}
+    result = {"project": str(project), **integration, "dataDirectory": str(data_directory()), "codexInstalled": bool(shutil.which("codex")), "doctor": json.loads(pilot.stdout)}
     if not options.no_service:
         action = "install" if sys.platform == "darwin" else "start"
         service = backend(["service", action], capture=True)
@@ -220,10 +226,12 @@ def task_template(args: list[str]) -> int:
     parser.add_argument("--project", type=Path, default=Path.cwd())
     parser.add_argument("--output", type=Path)
     parser.add_argument("--allow-repair", action="store_true")
+    parser.add_argument("--network-access", action="store_true", help="Authorize network access in the worker/repair sandbox")
+    parser.add_argument("--no-goal-monitoring", action="store_true", help="Explicitly opt out of default Codex milestone monitoring")
     parser.add_argument("--force", action="store_true")
     options = parser.parse_args(args)
     config = json.loads((RESOURCES / "task-defaults.json").read_text())
-    config.update(name=options.name, objective=options.objective, cwd=str(options.project.resolve(strict=True)), worker="codex", validator="command", validationArgv=[], activityTimeoutSeconds=600, allowRepair=options.allow_repair)
+    config.update(name=options.name, objective=options.objective, cwd=str(options.project.resolve(strict=True)), worker="codex", validator="command", validationArgv=[], activityTimeoutSeconds=600, allowRepair=options.allow_repair, networkAccess=options.network_access, goalMonitoring=not options.no_goal_monitoring)
     if options.output:
         _private_json(options.output, config, replace=options.force)
         print(json.dumps({"config": str(options.output.resolve()), "next": "Set validationArgv to the project's real acceptance command, then submit with atsys task submit --config <file>."}, indent=2))
@@ -246,6 +254,9 @@ def main(argv: list[str] | None = None) -> int:
   atsys task schema                     Print installed task JSON schema
   atsys task submit --config task.json  Hand off a task and return immediately
   atsys task list | show ID | stop ID | retry ID
+  atsys task status [ID] [--json]       Readable progress, blocker and next action
+  atsys task watch [ID] [--once]        Quiet live monitor; leaving does not stop work
+  atsys task logs [ID] [--raw]          Readable messages; raw transcripts opt-in
   atsys service install | status | start | uninstall
   atsys run --worker codex --objective ... --validation '["npm","test"]'
   atsys doctor
@@ -279,6 +290,9 @@ Persistent data: {data_directory()}
             print((RESOURCES / "task-schema.json").read_text(), end="")
             return 0
         return backend(args).returncode
+    except KeyboardInterrupt:
+        print("\nAtSys CLI closed. Managed execution is controlled separately; use task status to check it.", file=sys.stderr)
+        return 130
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, ImportError) as error:
         print(f"AtSys: {error}", file=sys.stderr)
         return 1

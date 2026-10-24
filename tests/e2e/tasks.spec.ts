@@ -50,7 +50,25 @@ test('managed coding task has independent validation, editable configuration and
       page.getByText('Independent validation command exited zero.', { exact: true }).first(),
     ).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/feature.txt · SHA-256/)).toBeVisible();
+    await expect(page.getByText('Latest observer goal check', { exact: true })).toBeVisible();
+    await expect(page.getByText('Next action', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Attempt output', { exact: true })).toBeHidden();
+    await expect(
+      page.getByText('Write feature.txt, then independently verify its contents.', { exact: true }),
+    ).toBeHidden();
+    await page
+      .getByText('Technical configuration and full execution plan', { exact: true })
+      .click();
+    await expect(
+      page.getByText('Write feature.txt, then independently verify its contents.', { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByText('Technical configuration and full execution plan', { exact: true })
+      .click();
     await page.getByRole('button', { name: 'Edit task wiring' }).click();
+    await expect(
+      page.getByLabel('Authorize network access for Codex worker and bounded repair'),
+    ).toBeVisible();
     await page.getByLabel('Maximum worker retries', { exact: true }).fill('3');
     await page.getByRole('button', { name: 'Save configuration', exact: true }).click();
     await page.reload();

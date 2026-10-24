@@ -5,10 +5,17 @@ import { execFileSync } from 'node:child_process';
 import { Store } from './store.js';
 import { ControlPlane } from './control-plane.js';
 import { doctor } from './doctor.js';
+import { setupDoctor } from './operations/doctor.js';
 import { executeProcess } from './process-adapter.js';
 import { OperationsStore } from './operations/store.js';
 import { createTask, changeTask } from './operations/tasks.js';
 import { withDefaults } from './operations/config.js';
+import { selectTask, watchTask } from './operations/monitor.js';
+import {
+  formatTaskStatus,
+  readableAttemptLog,
+  taskPresentation,
+} from '../shared/task-presentation.js';
 import {
   ensureDaemon,
   installService,
@@ -32,11 +39,15 @@ try {
   atsys task submit --config task.json       Submit durable task and exit
   atsys task submit --project /repo --name build -- command arg ...
   atsys task list | show <id> | stop <id> | retry <id>
+  atsys task status [id] [--json]            Readable current task and next action
+  atsys task watch [id] [--once]             Quiet live monitor; Ctrl+C does not stop work
+  atsys task logs [id] [--raw]               Readable worker messages (raw is opt-in)
   atsys service install | status | start | uninstall
                                              OS watchdog lifecycle (macOS launchd)
 
   atsys init [--project /absolute/repo]       Write opt-in .atsys/project.json only
-  atsys doctor                              Detect provider executables; no credential access
+  atsys doctor [--project /repo] [--config task.json]
+                                             Setup/write pilot and executable checks; no credentials
   atsys dashboard                           Print local console address
   atsys status                              Print durable run status
   atsys run --project /repo [options] -- command arg ...
@@ -86,7 +97,33 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
               updated: t.updatedAt,
             })),
           );
-        else if (action === 'show')
+        else if (['status', 'watch', 'logs'].includes(action)) {
+          const id = args[2]?.startsWith('--') ? undefined : args[2];
+          const task = selectTask(ops.read().tasks, id);
+          const dashboard = 'http://127.0.0.1:' + (process.env.ATSYS_PORT ?? 4310);
+          if (action === 'watch')
+            await watchTask(ops, task.id, {
+              interval: Number(value('--interval') ?? 2),
+              once: optionArgs.includes('--once'),
+              dashboard,
+            });
+          else if (action === 'status')
+            console.log(
+              optionArgs.includes('--json')
+                ? JSON.stringify(taskPresentation(task), null, 2)
+                : formatTaskStatus(task, process.stdout.columns || 88, Date.now(), dashboard),
+            );
+          else {
+            const attempt = task.attempts.findLast((a) => a.phase === 'worker');
+            console.log(
+              attempt
+                ? optionArgs.includes('--raw')
+                  ? attempt.output
+                  : readableAttemptLog(attempt.output, Number(value('--lines') ?? 12))
+                : 'Worker has not started.',
+            );
+          }
+        } else if (action === 'show')
           console.log(
             JSON.stringify(ops.read().tasks.find((t) => t.id === args[2]) ?? null, null, 2),
           );
@@ -130,20 +167,31 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
               2,
             ),
           );
-        } else throw new Error('Use task submit, list, show, stop, or retry');
+        } else throw new Error('Use task status, watch, logs, submit, list, show, stop, or retry');
       }
     } finally {
       ops.close();
     }
   } else if (command === 'doctor') {
-    console.table(
-      doctor().map((d) => ({
-        provider: d.label,
-        installed: d.installed,
-        adapter: d.level,
-        authentication: 'not checked',
-      })),
+    const file = value('--config');
+    const config = file ? withDefaults(JSON.parse(readFileSync(resolve(file), 'utf8'))) : undefined;
+    const report = setupDoctor(config?.cwd ?? resolve(value('--project') ?? process.cwd()), config);
+    console.log(
+      JSON.stringify(
+        {
+          ...report,
+          providers: doctor().map((d) => ({
+            provider: d.label,
+            installed: d.installed,
+            adapter: d.level,
+            authentication: 'not checked',
+          })),
+        },
+        null,
+        2,
+      ),
     );
+    if (!report.ready) process.exitCode = 1;
   } else if (command === 'dashboard') {
     console.log('http://127.0.0.1:' + (process.env.ATSYS_PORT ?? 4310));
     console.log('Start the service with npm start from the AtSys repository.');
@@ -188,17 +236,31 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
     const plane = new ControlPlane(store);
     try {
       if (command === 'status') {
-        console.table(
-          store.read().runs.map((r) => ({
-            id: r.id,
-            name: r.name,
-            status: r.status,
-            result: r.result,
-            adapter: r.adapter,
-            updated: r.updatedAt,
-          })),
-        );
-        console.log(`Console: http://127.0.0.1:${process.env.ATSYS_PORT ?? 4310}`);
+        const ops = new OperationsStore(dataDir);
+        const latest = ops.read().tasks[0];
+        ops.close();
+        if (latest) {
+          console.log(
+            formatTaskStatus(
+              latest,
+              process.stdout.columns || 88,
+              Date.now(),
+              'http://127.0.0.1:' + (process.env.ATSYS_PORT ?? 4310),
+            ),
+          );
+        } else {
+          console.table(
+            store.read().runs.map((r) => ({
+              id: r.id,
+              name: r.name,
+              status: r.status,
+              result: r.result,
+              adapter: r.adapter,
+              updated: r.updatedAt,
+            })),
+          );
+          console.log(`Console: http://127.0.0.1:${process.env.ATSYS_PORT ?? 4310}`);
+        }
       } else if (command === 'stop') {
         if (!args[1]) throw new Error('Supply a run ID');
         console.log(JSON.stringify(plane.stop(args[1]), null, 2));

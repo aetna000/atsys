@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys
+python -m pip install --upgrade atsys==0.2.1
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. Version 0.2.0 is available on [PyPI](https://pypi.org/project/atsys/0.2.0/) and as a [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.2.0). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.2.1 on PyPI](https://pypi.org/project/atsys/0.2.1/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.2.1) and [release notes](docs/releases/v0.2.1.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## Develop AtSys from source
 
@@ -54,9 +54,17 @@ Use **New managed task** to configure:
 
 AtSys launches the worker, checks it, and runs the independent validator. Failed execution or validation opens an incident. The supervisor diagnoses read-only and proposes restart, repair, or human escalation. Deterministic policy decides whether the action is permitted. A repair never bypasses the configured acceptance command.
 
+Version 0.2.1 adds a startup doctor/write pilot, unique default
+Codex milestone monitoring, periodic visible observer checks and actionable recovery
+handoffs. Networking remains explicit opt-in. See [goal-oriented setup and recovery](docs/GOAL-SUPERVISION.md)
+for setup, permissions and recovery behavior.
+
 **Run recovery drill** exercises a harmless local task that deliberately fails once, saves progress, resumes, and validates its result. It does not invoke a paid model or touch other projects.
 
 ## CLI from Codex or your terminal
+
+For a readable progress view, use `atsys task watch ID` or `atsys task status ID`.
+The [monitor guide](docs/TASK-MONITOR.md) explains snapshots, filtered logs and raw JSON.
 
 ```sh
 # Submit a coding task and immediately return to the caller.

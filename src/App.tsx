@@ -41,6 +41,7 @@ import {
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Context, useControlPlane } from './api';
 import { makeTheme } from './theme';
+import { VERSION } from '../shared/version';
 import { NewRunDialog } from './components/NewRunDialog';
 import { Tasks } from './pages/Tasks';
 import { Overview } from './pages/Overview';
@@ -177,7 +178,7 @@ export default function App() {
             <div>
               AtSys<span>AGENT CONTROL PLANE</span>
             </div>
-            <span className="version">v0.1</span>
+            <span className="version">v{VERSION}</span>
           </Link>
           <div className="workspace-label">
             <div className="workspace-avatar">J</div>

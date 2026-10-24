@@ -1,0 +1,15 @@
+{
+  "version": "0.2.1",
+  "date": "2026-10-24",
+  "scope": "Local candidate verification; registry publication separately gated by GitHub Actions",
+  "runtime_tests": { "passed": 47, "failed": 0 },
+  "browser_tests": { "passed": 18, "failed": 0, "viewports": ["desktop", "mobile"] },
+  "installed_wheel_tests": { "passed": 6, "failed": 0, "platform": "macOS", "includes": ["doctor without workload execution", "project and skill preservation", "hidden-directory dashboard links", "same-port restart", "independent acceptance", "LaunchAgent watchdog restart", "bundled version consistency"] },
+  "gates": ["typecheck", "format:check", "production build", "wheel from source distribution", "twine check", "git diff --check"],
+  "native_recovery": {
+    "scope": "Controlled local SQLite fixture, NOT DolphinBench accuracy evaluation",
+    "roles": ["command worker", "deterministic observer", "native read-only Codex supervisor", "separate authorized native Codex repair", "resumed command worker", "independent validator"],
+    "recorded_run": { "tasks": 20, "fault_after": 5, "observer_detection_seconds": 12.996, "diagnosis_seconds": 28.678, "repair_seconds": 41.766, "unique_results": 20, "first_five_replayed": false, "manual_repair": false, "validation_passed": true },
+    "qualification": "Native drills used locally installed pre-release recovery code; final 0.2.1 candidate additionally passed clean installed-wheel checks. No benchmark accuracy improvement is inferred."
+  }
+}

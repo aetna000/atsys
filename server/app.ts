@@ -18,7 +18,12 @@ import {
   uninstallService,
 } from './operations/service.js';
 import { RUNTIMES } from '../shared/types.js';
-export function createApp(plane: ControlPlane, operations?: OperationsStore) {
+import { VERSION } from '../shared/version.js';
+export function createApp(
+  plane: ControlPlane,
+  operations?: OperationsStore,
+  publicDirectory = resolve(applicationRoot, 'dist'),
+) {
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -55,7 +60,7 @@ export function createApp(plane: ControlPlane, operations?: OperationsStore) {
   app.use(express.json({ limit: '32kb' }));
   app.get('/api/health', (_req, res) =>
     res.json({
-      version: '0.2.0',
+      version: VERSION,
       timestamp: new Date().toISOString(),
       mode: 'local',
       instanceId: operations
@@ -221,10 +226,12 @@ export function createApp(plane: ControlPlane, operations?: OperationsStore) {
     });
   }
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found' }));
-  const dist = resolve(applicationRoot, 'dist');
+  const dist = publicDirectory;
   if (existsSync(dist)) {
     app.use(express.static(dist));
-    app.get('/{*path}', (_req, res) => res.sendFile(resolve(dist, 'index.html')));
+    // The install may live under .local/.venv. Root the public filename explicitly
+    // so sendFile does not mistake hidden installation ancestors for public dotfiles.
+    app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: dist }));
   }
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof z.ZodError) {

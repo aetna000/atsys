@@ -11,6 +11,7 @@ import time
 import unittest
 import urllib.request
 from atsys.cli import PACKAGE, RUNTIME, node_executable
+from atsys import __version__
 
 
 class InstalledWheelTests(unittest.TestCase):
@@ -69,7 +70,8 @@ class InstalledWheelTests(unittest.TestCase):
         self.assertIn("nodejs_wheel", node_executable())
         schema = json.loads(self.cli("task", "schema").stdout)
         self.assertIn("validationArgv", schema["properties"])
-        self.assertEqual(self.cli("--version").stdout.strip(), "0.2.0")
+        self.assertEqual(self.cli("--version").stdout.strip(), __version__)
+        self.assertEqual(json.loads((RUNTIME / "build.json").read_text())["version"], __version__)
 
     def test_init_is_idempotent_and_preserves_project_instructions(self):
         original = "# My instructions\nPreserve project behavior.\n"
@@ -78,6 +80,8 @@ class InstalledWheelTests(unittest.TestCase):
         first = json.loads(self.cli(*args).stdout)
         second = json.loads(self.cli(*args).stdout)
         self.assertEqual(first["skill"], second["skill"])
+        self.assertTrue(first["doctor"]["ready"])
+        self.assertTrue(any(c["name"] == "write-read-pilot" and c["passed"] for c in first["doctor"]["checks"]))
         self.assertEqual((self.project / "AGENTS.md").read_text(), original)
         skill = Path(first["skill"])
         self.assertIn("ATSYS_TASK_ID", skill.read_text())
@@ -86,6 +90,23 @@ class InstalledWheelTests(unittest.TestCase):
         self.assertNotEqual(self.cli(*args, check=False).returncode, 0)
         self.assertIn("My customization", skill.read_text())
         self.assertNotEqual(self.cli("integrate", "--remove", check=False).returncode, 0)
+
+    def test_doctor_checks_config_without_executing_workload(self):
+        task_path = self.project / "task.json"
+        self.cli("task", "template", "--objective", "Validate setup only", "--network-access", "--output", str(task_path))
+        config = json.loads(task_path.read_text())
+        self.assertTrue(config["networkAccess"])
+        self.assertTrue(config["goalMonitoring"])
+        config.update(worker="command", argv=[node_executable(), "-e", "require('fs').writeFileSync('DO_NOT_RUN','bad')"], validator="exit-code", recovery="notify")
+        task_path.write_text(json.dumps(config))
+        report = json.loads(self.cli("doctor", "--config", str(task_path)).stdout)
+        self.assertTrue(report["ready"])
+        self.assertFalse((self.project / "DO_NOT_RUN").exists())
+        config["argv"] = ["atsys-nonexistent-program-for-test"]
+        task_path.write_text(json.dumps(config))
+        failed = self.cli("doctor", "--config", str(task_path), check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse(json.loads(failed.stdout)["ready"])
 
     def test_unmodified_integration_can_be_removed_without_touching_other_skills(self):
         other = self.project / ".agents/skills/other/SKILL.md"
@@ -108,6 +129,9 @@ class InstalledWheelTests(unittest.TestCase):
         self.assertEqual(self.cli("ui", "--no-open").stdout.strip(), url)
         with urllib.request.urlopen(url) as response:
             self.assertIn("<html", response.read().decode())
+        with urllib.request.urlopen(url + "/tasks/direct-link-probe") as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn("<html", response.read().decode())
         with urllib.request.urlopen(url + "/api/health") as response:
             self.assertEqual(json.load(response)["instanceId"], hashlib.sha256(str(self.data).encode()).hexdigest())
         submitted = json.loads(self.cli("task", "submit", "--config", str(task_path)).stdout)
@@ -121,6 +145,19 @@ class InstalledWheelTests(unittest.TestCase):
         self.assertEqual(task["status"], "completed", task)
         self.assertEqual([a["phase"] for a in task["attempts"]], ["worker", "validator"])
         self.assertEqual(task["attempts"][-1]["validation"]["artifacts"][0]["path"], "feature.txt")
+        # Restart promptly on the same URL after real HTTP connections. TIME_WAIT
+        # must not look like a live foreign instance and silently shift the port.
+        record = json.loads((self.data / "dashboard.json").read_text())
+        os.kill(record["pid"], signal.SIGTERM)
+        for _ in range(40):
+            try:
+                command = subprocess.check_output(["ps", "-p", str(record["pid"]), "-o", "stat="], text=True, stderr=subprocess.DEVNULL).strip()
+                if command.startswith("Z"):
+                    break
+            except subprocess.CalledProcessError:
+                break
+            time.sleep(0.05)
+        self.assertEqual(self.cli("ui", "--no-open", "--port", str(record["port"])).stdout.strip(), url)
 
     @unittest.skipUnless(sys.platform == "darwin", "launchd integration requires macOS")
     def test_installed_watchdog_recovers_after_process_death(self):

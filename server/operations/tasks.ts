@@ -17,6 +17,10 @@ export function createTask(store: OperationsStore, input: unknown) {
       attempts: [],
       events: [],
     };
+    if (config.worker === 'codex' && config.goalMonitoring && !config.progressFile) {
+      config.progressFile = `.atsys/progress/${task.id}.json`;
+      config.progressTimeoutSeconds ||= 600;
+    }
     taskEvent(
       task,
       'system',
@@ -75,6 +79,13 @@ export function changeTask(
           'Retry budget exhausted. Increase the retry limit explicitly before retrying.',
         );
       t.stopRequested = false;
+      // Operator retry is a new worker authorization, not an instruction to replay
+      // the watchdog's handling of a previously interrupted terminal attempt.
+      for (const a of t.attempts) {
+        if (!a.cleanupConfirmed)
+          throw new DomainError('Retry requires confirmed cleanup of previous attempts.');
+        a.handled = true;
+      }
       t.status = 'queued';
       t.nextAttemptAt = stamp();
       t.attentionReason = undefined;

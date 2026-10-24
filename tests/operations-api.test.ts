@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -14,6 +14,29 @@ import { killAttempt } from '../server/operations/processes.js';
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const close = (s: Server) =>
   new Promise<void>((resolve, reject) => s.close((e) => (e ? reject(e) : resolve())));
+test('direct task links work under hidden installation directories without exposing dotfiles', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'atsys-deep-link-'));
+  const publicRoot = join(root, '.hidden-install', 'dist');
+  mkdirSync(publicRoot, { recursive: true });
+  writeFileSync(join(publicRoot, 'index.html'), '<html>AtSys public app</html>');
+  writeFileSync(join(publicRoot, '.private'), 'never expose this');
+  const store = new Store(join(root, 'state'));
+  const server = createApp(new ControlPlane(store), undefined, publicRoot).listen(0, '127.0.0.1');
+  await new Promise<void>((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    for (const path of ['/', '/tasks/existing-task', '/.private']) {
+      const response = await fetch(base + path);
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), '<html>AtSys public app</html>');
+    }
+    assert.equal((await fetch(base + '/api/not-a-route')).status, 404);
+  } finally {
+    await close(server);
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 test('managed task survives API shutdown; task config and notification secrets enforce API boundaries', async () => {
   const root = mkdtempSync(join(tmpdir(), 'atsys-api-durable-'));
   const store = new Store(root);

@@ -27,5 +27,7 @@
   "supervisorTimeoutSeconds": 300,
   "maxSupervisorCalls": 2,
   "allowRepair": false,
-  "repairTimeoutSeconds": 600
+  "repairTimeoutSeconds": 600,
+  "networkAccess": false,
+  "goalMonitoring": true
 }

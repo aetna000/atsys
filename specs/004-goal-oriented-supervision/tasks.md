@@ -1,0 +1,8 @@
+- [x] Carry full goal/config and approved recovery instructions between roles.
+- [x] Typed blocker reports and bounded follow-up for unsupported escalations.
+- [x] Explicit worker network permission, migration and dashboard control.
+- [x] Unique default Codex goal-progress telemetry and visible observer reviews.
+- [x] Correct explicit-retry reconciliation without replaying an interrupted attempt.
+- [x] Startup/configuration doctor, safe write/read pilot and owned-directory repair.
+- [x] Regression, process, package and focused desktop/mobile browser gates.
+- [x] Refresh local installed runtime and existing benchmark task safely; report actual state.

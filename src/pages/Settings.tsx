@@ -4,6 +4,7 @@ import { ArrowUpRight, Check, RefreshCw, Save, ShieldCheck } from 'lucide-react'
 import { api, useConsole } from '../api';
 import type { Diagnostic, Settings as SettingsType } from '../../shared/types';
 import { Badge, PageTitle, Panel, timestamp } from '../components/common';
+import { VERSION } from '../../shared/version';
 export function Settings() {
   const c = useConsole();
   const [form, setForm] = useState<SettingsType>(c.state.settings);
@@ -218,7 +219,7 @@ export function Settings() {
         <div className="integration-body">
           <div className="two-columns">
             <div>
-              <h3>AtSys 0.1.0 · local foundation</h3>
+              <h3>AtSys {VERSION} · local supervision</h3>
               <p>
                 React + Material UI · SQLite durable state · provider-neutral roles. Simulated
                 sessions are labeled and never invoke a paid model.

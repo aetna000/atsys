@@ -3,6 +3,8 @@ import { runtimeArgs } from '../runtime.js';
 import type { Attempt, ManagedTask, OperationsState } from '../../shared/operations.js';
 import { OperationsStore, enqueue, stamp, taskEvent, uid } from './store.js';
 import { killAttempt, runnerIdentity } from './processes.js';
+import { blockerParser } from './codex.js';
+import { setupDoctor } from './doctor.js';
 export const active = (a: Attempt) => ['starting', 'running'].includes(a.status);
 export function daemonHealthy(s: OperationsState) {
   return !!s.daemon && Date.now() - Date.parse(s.daemon.heartbeatAt) < 10000;
@@ -72,6 +74,24 @@ export class Watchdog {
           continue;
         }
         if (current && active(current)) {
+          if (
+            current.phase === 'worker' &&
+            (!current.lastObservedAt || Date.now() - Date.parse(current.lastObservedAt) >= 60000)
+          ) {
+            current.lastObservedAt = stamp();
+            const age = Math.max(
+              0,
+              Math.floor((Date.now() - Date.parse(current.lastProgressAt)) / 1000),
+            );
+            taskEvent(
+              task,
+              'observer',
+              'goal.checked',
+              `Goal check: ${current.progress ? `${current.progress.completed}/${current.progress.total} worker-reported units` : 'no reported goal progress yet'}; last progress ${age}s ago. ` +
+                `Progress stall window ${current.config.progressTimeoutSeconds ? current.config.progressTimeoutSeconds + 's' : 'disabled'}; ` +
+                `output inactivity window ${current.config.activityTimeoutSeconds ? current.config.activityTimeoutSeconds + 's' : 'disabled'}. Heartbeat is liveness only; completion awaits independent validation.`,
+            );
+          }
           const stale =
             Date.now() - Date.parse(current.heartbeatAt) >
             current.config.heartbeatTimeoutSeconds * 1000;
@@ -108,6 +128,10 @@ export class Watchdog {
         if (current && !current.handled) {
           if (!current.cleanupConfirmed) {
             if (!killAttempt(current)) {
+              // ps can briefly expose an exiting runner without its command line.
+              // Wait for reconciliation, never signal an unverified/foreign PID.
+              current.cleanupPendingAt ??= stamp();
+              if (Date.now() - Date.parse(current.cleanupPendingAt) < 2000) continue;
               this.attention(s, task, 'Process group cleanup could not be confirmed.');
               continue;
             }
@@ -193,13 +217,31 @@ export class Watchdog {
                 'Configured policy permits one bounded workspace-write repair for this escalation.',
               );
               this.launch(task, 'repair', launches);
+            } else if (p.action === 'escalate' && !blockerParser.safeParse(p.blocker).success) {
+              taskEvent(
+                task,
+                'policy',
+                'escalation.unsubstantiated',
+                'Escalation lacks a concrete blocker with evidence, attempted remedies and required resolution. Requesting bounded diagnostic follow-up, not replaying the workload.',
+              );
+              if (
+                task.attempts.filter((a) => a.phase === 'supervisor').length <
+                task.config.maxSupervisorCalls
+              )
+                this.launch(task, 'supervisor', launches);
+              else
+                this.attention(
+                  s,
+                  task,
+                  'Diagnostic budget exhausted without an evidence-backed blocker. ' + p.reason,
+                );
             } else
               this.attention(
                 s,
                 task,
                 p.action === 'repair'
                   ? 'Repair requested but permission or retry budget is unavailable. ' + p.reason
-                  : p.reason,
+                  : `${p.reason}${p.blocker ? ` Blocker: ${p.blocker.kind}. Required: ${p.blocker.requiredResolution}. Evidence: ${p.blocker.evidence.join('; ')}. Remedies attempted: ${p.blocker.attemptedRemedies.join('; ')}` : ''}`,
               );
           } else {
             if (current.status === 'succeeded' && current.repairResult?.fixed)
@@ -249,7 +291,7 @@ export class Watchdog {
       t,
       'policy',
       'retry.authorized',
-      `Retry using configured ${t.config.resumeArgv.length ? 'checkpoint resume argv' : 'original command'}. ${reason}`,
+      `Retry using configured ${t.config.worker === 'codex' ? 'Codex objective and approved recovery guidance' : t.config.resumeArgv.length ? 'checkpoint resume argv' : 'original command'}. ${reason}`,
     );
     enqueue(s, t, 'Recovery', `Retry scheduled: ${reason}`, `${t.attempts.at(-1)!.id}:retry`);
   }
@@ -285,6 +327,24 @@ export class Watchdog {
       handled: false,
     };
     t.attempts.push(a);
+    if (phase === 'worker') {
+      const pilot = setupDoctor(config.cwd, config);
+      taskEvent(t, 'observer', 'setup.checked', JSON.stringify(pilot));
+      if (!pilot.ready) {
+        a.status = 'failed';
+        a.failure =
+          'Setup doctor blocked execution: ' +
+          pilot.checks
+            .filter((c) => !c.passed)
+            .map((c) => `${c.name}: ${c.detail}`)
+            .join('; ');
+        a.output = JSON.stringify(pilot);
+        a.endedAt = stamp();
+        a.cleanupConfirmed = true;
+        t.status = 'running';
+        return;
+      }
+    }
     t.status =
       phase === 'worker' || phase === 'validator'
         ? 'running'

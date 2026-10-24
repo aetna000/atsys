@@ -168,6 +168,14 @@
       "type": "integer",
       "minimum": 5,
       "maximum": 7200
+    },
+    "networkAccess": {
+      "default": false,
+      "type": "boolean"
+    },
+    "goalMonitoring": {
+      "default": true,
+      "type": "boolean"
     }
   },
   "required": [
@@ -199,7 +207,9 @@
     "supervisorTimeoutSeconds",
     "maxSupervisorCalls",
     "allowRepair",
-    "repairTimeoutSeconds"
+    "repairTimeoutSeconds",
+    "networkAccess",
+    "goalMonitoring"
   ],
   "additionalProperties": false
 }

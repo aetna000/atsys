@@ -3907,6 +3907,18 @@ td small {
   max-height: 780px;
   overflow: auto;
 }
+.ops-disclosure {
+  margin-block: 14px;
+}
+.ops-disclosure > summary {
+  cursor: pointer;
+  padding-block: 10px;
+  font-weight: 600;
+}
+.ops-disclosure > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
 .ops-timeline > div {
   display: flex;
   gap: 15px;

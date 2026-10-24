@@ -150,7 +150,12 @@ const child = spawn(argv[0], argv.slice(1), {
   cwd: c.cwd,
   shell: false,
   stdio: ['pipe', 'pipe', 'pipe'],
-  env: { ...process.env, ATSYS_TASK_ID: task.id, ATSYS_ATTEMPT_ID: attempt.id },
+  env: {
+    ...process.env,
+    ATSYS_DATA_DIR: store.directory,
+    ATSYS_TASK_ID: task.id,
+    ATSYS_ATTEMPT_ID: attempt.id,
+  },
 });
 child.stdout.on('data', (b: Buffer) => feed('stdout', b));
 child.stderr.on('data', (b: Buffer) => feed('stderr', b));
@@ -183,6 +188,21 @@ function finish() {
   let proposal: Attempt['proposal'];
   let repairResult: Attempt['repairResult'];
   if (!failure && exitCode !== 0) failure = `Process exited with code ${exitCode ?? 'unknown'}`;
+  if (
+    !failure &&
+    prompt !== undefined &&
+    c.hooks.some(
+      (h) =>
+        (!h.phases.length || h.phases.includes(attempt.phase)) &&
+        h.events.some((e) => e.startsWith('codex_')),
+    ) &&
+    !store
+      .read()
+      .tasks.find((t) => t.id === taskId)
+      ?.attempts.find((a) => a.id === attemptId)?.nativeHooksConnectedAt
+  )
+    failure =
+      'Native Codex hooks were not connected. Review and trust the AtSys bridge in Codex /hooks; no hook-trust bypass is enabled.';
   if (!failure) {
     try {
       if (['supervisor', 'repair'].includes(attempt.phase)) {
@@ -267,8 +287,14 @@ function finish() {
     a.endedAt = stamp();
     a.heartbeatAt = stamp();
     a.output = output;
-    a.progress = progress;
-    a.lastProgressAt = lastProgressAt;
+    if (
+      progress &&
+      (!a.progress ||
+        (progress.total === a.progress.total && progress.completed >= a.progress.completed))
+    )
+      a.progress = progress;
+    if (Date.parse(lastProgressAt) > Date.parse(a.lastProgressAt))
+      a.lastProgressAt = lastProgressAt;
     a.lastActivityAt = lastActivityAt;
     a.failure = failure && redact(failure);
     a.exitCode = exitCode;
@@ -295,6 +321,10 @@ const timer = setInterval(() => {
     const a = current?.attempts.find((a) => a.id === attemptId);
     if (!a || !['starting', 'running'].includes(a.status))
       return terminate('Attempt was fenced by watchdog');
+    if (Date.parse(a.lastProgressAt) > Date.parse(lastProgressAt)) {
+      lastProgressAt = a.lastProgressAt;
+      progress = a.progress;
+    }
     if (current?.stopRequested) return terminate('Operator requested stop');
     if (Date.now() - Date.parse(attempt.startedAt) > timeout)
       return terminate('Attempt deadline exceeded');
@@ -310,19 +340,26 @@ const timer = setInterval(() => {
       } catch {
         /* absence/invalid telemetry never advances progress; stall deadline still applies */
       }
-      if (
-        c.progressTimeoutSeconds &&
-        Date.now() - Date.parse(lastProgressAt) > c.progressTimeoutSeconds * 1000
-      )
-        return terminate('Progress stalled: no valid progress change within configured window');
     }
+    if (
+      attempt.phase === 'worker' &&
+      c.progressTimeoutSeconds &&
+      Date.now() - Date.parse(lastProgressAt) > c.progressTimeoutSeconds * 1000
+    )
+      return terminate('Progress stalled: no valid progress change within configured window');
     store.update((s) => {
       const a = s.tasks.find((t) => t.id === taskId)?.attempts.find((a) => a.id === attemptId);
       if (a && a.status === 'running' && a.pid === process.pid) {
         a.heartbeatAt = stamp();
         a.output = output;
-        a.progress = progress;
-        a.lastProgressAt = lastProgressAt;
+        if (
+          progress &&
+          (!a.progress ||
+            (progress.total === a.progress.total && progress.completed >= a.progress.completed))
+        )
+          a.progress = progress;
+        if (Date.parse(lastProgressAt) > Date.parse(a.lastProgressAt))
+          a.lastProgressAt = lastProgressAt;
         a.lastActivityAt = lastActivityAt;
       }
     });

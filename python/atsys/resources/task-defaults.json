@@ -29,5 +29,6 @@
   "allowRepair": false,
   "repairTimeoutSeconds": 600,
   "networkAccess": false,
-  "goalMonitoring": true
+  "goalMonitoring": true,
+  "hooks": []
 }

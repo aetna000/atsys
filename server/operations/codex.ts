@@ -1,4 +1,5 @@
 import type { Attempt, ManagedTask } from '../../shared/operations.js';
+import { codexHookArgs } from './codex-hooks.js';
 import { z } from 'zod';
 export const blockerParser = z
   .object({
@@ -81,6 +82,12 @@ export function codexInvocation(
   if (c.networkAccess && attempt.phase !== 'supervisor')
     argv.push('-c', 'sandbox_workspace_write.network_access=true');
   if (model.trim()) argv.push('--model', model.trim());
+  argv.push(
+    ...codexHookArgs({
+      ...c,
+      hooks: c.hooks.filter((h) => !h.phases.length || h.phases.includes(attempt.phase)),
+    }),
+  );
   if (attempt.phase !== 'worker') argv.push('--output-schema', schemaPath);
   argv.push('-');
   const previous = task.attempts

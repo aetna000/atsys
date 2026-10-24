@@ -91,7 +91,11 @@ export function taskPresentation(task: ManagedTask) {
         ? 'Investigating now; a recovery decision is pending'
         : supervisor?.proposal
           ? `${supervisor.proposal.action}: ${supervisor.proposal.reason}`
-          : 'On standby; called when an incident needs diagnosis',
+          : task.config.recovery !== 'supervised'
+            ? `Disabled; ${task.config.recovery === 'notify' ? 'notify-only recovery' : 'deterministic restart policy'}`
+            : ['completed', 'stopped', 'needs_attention'].includes(task.status)
+              ? 'Inactive; task is not executing'
+              : 'On standby; called when an incident needs diagnosis',
     blocker: task.status === 'needs_attention' ? (task.attentionReason ?? null) : null,
     next,
     progressWindow: task.config.progressTimeoutSeconds,
@@ -142,6 +146,8 @@ export function formatTaskStatus(
   row('', 'ATSYS · TASK MONITOR');
   row('', p.name);
   lines.push('─'.repeat(width));
+  const latest = taskLogEntries(task, 1)[0];
+  if (latest) row('Latest', `${latest.phase}: ${latest.message}`, 1);
   row('State', p.state);
   row('Goal', p.objective);
   row(
@@ -172,41 +178,169 @@ export function formatTaskStatus(
   return lines.join('\n');
 }
 
-export function readableAttemptLog(output: string, limit = 12) {
-  const messages: string[] = [];
-  for (const line of output.split('\n')) {
-    if (!line.trim()) continue;
+export interface ActivityEntry {
+  id: string;
+  kind: 'message' | 'tool' | 'error' | 'progress' | 'system';
+  message: string;
+  phase?: string;
+  attemptId?: string;
+}
+function messageText(value: unknown, depth = 0): string {
+  if (depth > 5) return 'Structured output recorded; raw details are available separately.';
+  if (typeof value === 'string') {
+    const text = plainText(value).trim();
     try {
-      const event = JSON.parse(line);
-      if (event.item?.type === 'agent_message' && typeof event.item.text === 'string') {
-        try {
-          const result = JSON.parse(event.item.text);
-          messages.push(
-            typeof result?.reason === 'string'
-              ? shortText(`Decision: ${result.action ?? 'recorded'}. ${result.reason}`, 600)
-              : 'Structured response recorded; open raw output for technical details.',
-          );
-        } catch {
-          messages.push(shortText(event.item.text, 600));
-        }
-      } else if (event.type === 'error')
-        messages.push(shortText(event.message ?? 'Worker error', 400));
-      else if (
-        event.item?.type === 'command_execution' &&
-        event.item.status === 'completed' &&
-        event.item.exit_code !== 0
-      )
-        messages.push(
-          `A tool check failed (exit ${event.item.exit_code ?? 'unknown'}). Inspect full JSON for the redacted transcript.`,
-        );
+      return messageText(JSON.parse(text), depth + 1);
     } catch {
-      // Bounded snapshots can begin in the middle of a provider JSON line. Do not
-      // turn that truncated nested tool payload back into a wall of escaped text.
-      if (!/^\s*[{[]/.test(line) && !line.includes('\\"')) messages.push(shortText(line, 400));
+      return text.slice(0, 4000);
     }
   }
+  if (!value || typeof value !== 'object') return '';
+  const row = value as Record<string, any>;
+  if (typeof row.reason === 'string')
+    return `Decision: ${row.action ?? 'recorded'}. ${plainText(row.reason)}`;
+  for (const key of ['message', 'text', 'summary', 'detail'])
+    if (typeof row[key] === 'string') return messageText(row[key], depth + 1);
+  if (row.error) return messageText(row.error, depth + 1);
+  if (typeof row.completed === 'number' && typeof row.total === 'number')
+    return `Progress: ${row.completed}/${row.total}${row.checkpoint ? ` · ${shortText(String(row.checkpoint))}` : ''}`;
+  return 'Structured output recorded; raw details are available separately.';
+}
+export const readableMessage = (value: string, limit = 600) => shortText(messageText(value), limit);
+export function attemptLogEntries(output: string, limit = 100): ActivityEntry[] {
+  const entries: ActivityEntry[] = [];
+  let lines = output.split('\n');
+  try {
+    const document = JSON.parse(output);
+    if (document && typeof document === 'object' && !Array.isArray(document)) lines = [output];
+  } catch {
+    /* Streamed JSON lines are parsed individually below. */
+  }
+  for (const [index, raw] of lines.entries()) {
+    const line = plainText(raw).trim();
+    if (!line) continue;
+    const push = (kind: ActivityEntry['kind'], message: string) => {
+      if (message.trim())
+        entries.push({ id: String(index), kind, message: plainText(message).slice(0, 4000) });
+    };
+    try {
+      const event = JSON.parse(line);
+      const item = event?.item ?? event;
+      const type = item?.type;
+      if (type === 'agent_message' || type === 'message') {
+        const text =
+          item.text ??
+          item.content
+            ?.filter((c: any) => typeof c.text === 'string')
+            .map((c: any) => c.text)
+            .join('\n');
+        if (typeof text === 'string') push('message', messageText(text));
+      } else if (
+        ['command_execution', 'tool_execution', 'mcp_tool_call', 'function_call'].includes(type)
+      ) {
+        let args = item.arguments ?? item.input ?? {};
+        if (typeof args === 'string') {
+          try {
+            args = JSON.parse(args);
+          } catch {
+            args = {};
+          }
+        }
+        const command = item.command ?? args.command ?? args.cmd;
+        const name = command
+          ? shortText(String(command), 260)
+          : shortText(String(item.name ?? item.tool ?? type.replaceAll('_', ' ')), 120);
+        const finished =
+          event.type?.endsWith('.completed') || ['completed', 'failed'].includes(item.status);
+        const failed =
+          item.status === 'failed' ||
+          (item.exit_code !== undefined && item.exit_code !== null && item.exit_code !== 0);
+        const state = finished ? (failed ? 'Failed' : 'Finished') : 'Running';
+        push(
+          failed ? 'error' : 'tool',
+          `${state}${item.exit_code !== undefined && item.exit_code !== null ? ` (exit ${item.exit_code})` : ''}: ${name}`,
+        );
+      } else if (type === 'file_change') {
+        const paths = (item.changes ?? []).map((c: any) =>
+          shortText(String(c.path ?? c.file ?? 'file'), 140),
+        );
+        push(
+          'tool',
+          `Files ${item.status === 'failed' ? 'not updated' : event.type?.endsWith('.completed') ? 'updated' : 'being updated'}${paths.length ? ': ' + paths.slice(0, 8).join(', ') : ''}`,
+        );
+      } else if (
+        event.type === 'error' ||
+        event.type === 'turn.failed' ||
+        !!event.error ||
+        event.level === 'error'
+      ) {
+        push('error', messageText(event.error ?? event.message ?? 'Worker error'));
+      } else if (
+        typeof event.message === 'string' ||
+        typeof event.text === 'string' ||
+        typeof event.summary === 'string' ||
+        typeof event.reason === 'string' ||
+        typeof event.detail === 'string'
+      ) {
+        push('message', messageText(event));
+      } else if (typeof event.completed === 'number' && typeof event.total === 'number') {
+        push('progress', messageText(event));
+      } else if (event.type === 'turn.started') push('system', 'Codex turn started');
+      else if (event.type === 'turn.completed') push('system', 'Codex turn finished');
+      else if (!event.type && event && typeof event === 'object')
+        push('system', messageText(event));
+      // Provider envelopes, usage and nested tool payloads stay in the raw view.
+    } catch {
+      // A bounded snapshot can start inside a JSON payload. Never display escaped fragments.
+      if (!/^[{[\]}]/.test(line) && !/^"[^"]+"\s*:/.test(line) && !line.includes('\\"'))
+        push('message', line);
+    }
+  }
+  return entries.slice(-Math.max(1, Math.min(limit, 100))).reverse();
+}
+export function taskLogEntries(
+  task: ManagedTask,
+  limit = 100,
+  attemptId?: string,
+): ActivityEntry[] {
+  const entries: ActivityEntry[] = [];
+  for (const attempt of [...task.attempts].reverse()) {
+    if (attemptId && attempt.id !== attemptId) continue;
+    const logs = attemptLogEntries(attempt.output);
+    if (attempt.failure || attempt.validation || !logs.length)
+      entries.push({
+        id: `${attempt.id}:status`,
+        kind: attempt.failure ? 'error' : 'system',
+        message:
+          attempt.failure ??
+          attempt.validation?.detail ??
+          `${attempt.phase}: ${attempt.status}${attempt.status === 'running' ? ' · waiting for output' : ''}`,
+        phase: attempt.phase,
+        attemptId: attempt.id,
+      });
+    entries.push(
+      ...logs.map((entry) => ({
+        ...entry,
+        id: `${attempt.id}:${entry.id}`,
+        phase: attempt.phase,
+        attemptId: attempt.id,
+      })),
+    );
+  }
+  return entries.slice(0, Math.max(1, Math.min(limit, 100)));
+}
+export function readableTaskLog(task: ManagedTask, limit = 12) {
+  const entries = taskLogEntries(task, limit);
   return (
-    messages.slice(-Math.max(1, Math.min(limit, 100))).join('\n\n') ||
+    entries.map((entry) => `[${entry.phase} · ${entry.kind}] ${entry.message}`).join('\n\n') ||
+    'Worker has not started.'
+  );
+}
+export function readableAttemptLog(output: string, limit = 12) {
+  return (
+    attemptLogEntries(output, limit)
+      .map((entry) => entry.message)
+      .join('\n\n') ||
     'No readable messages recorded. Full tool transcripts remain available through task show.'
   );
 }

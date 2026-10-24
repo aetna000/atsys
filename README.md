@@ -4,14 +4,14 @@ A local control plane for **any coding work you delegate**: implementing feature
 
 The benchmark failure motivated this project; benchmarks are not its domain model.
 
-![AtSys managed tasks](docs/screenshots/tasks-live-desktop.png)
+![AtSys managed tasks](docs/screenshots/tasks-desktop.png)
 
 ## Start
 
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.2.1
+python -m pip install --upgrade atsys==0.3.0b1
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.2.1 on PyPI](https://pypi.org/project/atsys/0.2.1/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.2.1) and [release notes](docs/releases/v0.2.1.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b1 on PyPI](https://pypi.org/project/atsys/0.3.0b1/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b1) and [release notes](docs/releases/v0.3.0b1.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## Develop AtSys from source
 
@@ -39,7 +39,7 @@ npm run dev
 
 Open **http://127.0.0.1:5173**. For a built application, run `npm run build` then `npm start` and open **http://127.0.0.1:4310**. `ATSYS_PORT` and `ATSYS_DATA_DIR` override the local API port and private data directory.
 
-The primary **Managed tasks** page runs real workloads. The older resource-console screens are explicitly grouped as samples. No Docker, Kubernetes, AtMem, or AtFlows is required.
+The 0.3.0b1 beta UI exposes managed tasks and operational service/Telegram settings. Sample fleet, costs, approvals and unavailable companion pages are removed from its navigation and routes. No Docker, Kubernetes, AtMem, or AtFlows is required.
 
 ## Delegate work
 
@@ -60,6 +60,8 @@ handoffs. Networking remains explicit opt-in. See [goal-oriented setup and recov
 for setup, permissions and recovery behavior.
 
 **Run recovery drill** exercises a harmless local task that deliberately fails once, saves progress, resumes, and validates its result. It does not invoke a paid model or touch other projects.
+
+The 0.3.0b1 beta release adds [task lifecycle hooks, native Codex tool/turn callbacks and optional AtBot/Pydantic AI hooks](docs/HOOKS.md), with configuration and receipts in the dashboard. See [beta release notes](docs/releases/v0.3.0b1.md).
 
 ## CLI from Codex or your terminal
 
@@ -86,7 +88,7 @@ npm run atsys -- task retry task-ID
 
 Update the example's working directory and objective before submitting it. JSON argv is passed directly with `shell:false`; use an explicit shell executable only when your task requires one. Generic commands run as your local user. Exit-code validation is available when sufficient; a custom independent acceptance command is preferred for coding changes. Benchmark JSON remains an optional specialized validator.
 
-`run` and `task submit` persist work and exit. `run --attached` retains the original terminal-owned executor for compatibility. `status`/`stop run-ID` refer to the older sample/basic-run store; `task list`/`task stop task-ID` refer to managed work.
+`run` and `task submit` persist work and exit. `run --attached` retains the original terminal-owned executor for compatibility. `status` shows the latest managed task; `task logs ID` formats activity newest first across all attempts. `stop run-ID` retains the legacy basic-run interface; use `task stop task-ID` for managed work.
 
 ## Make the watchdog durable
 
@@ -130,7 +132,8 @@ npm run test:e2e
 npm run format:check
 ```
 
-- [Active packaging specification](specs/003-python-package/spec.md), [plan](specs/003-python-package/plan.md), [tasks](specs/003-python-package/tasks.md)
+- [Hook API specification](specs/004-lifecycle-hooks/spec.md), [operational UI specification](specs/005-operational-ui/spec.md)
+- [Packaging specification](specs/003-python-package/spec.md), [plan](specs/003-python-package/plan.md), [tasks](specs/003-python-package/tasks.md)
 - [Durable supervision specification](specs/002-durable-task-supervision/spec.md), [plan](specs/002-durable-task-supervision/plan.md), [tasks](specs/002-durable-task-supervision/tasks.md)
 - [Constitution](.specify/memory/constitution.md), [original console specification](specs/001-supervision-console/spec.md)
 - [Architecture](docs/ARCHITECTURE.md), [verification report](docs/IMPLEMENTATION.md), [remaining work](docs/ROADMAP.md)

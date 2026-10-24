@@ -176,6 +176,114 @@
     "goalMonitoring": {
       "default": true,
       "type": "boolean"
+    },
+    "hooks": {
+      "default": [],
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+          },
+          "events": {
+            "minItems": 1,
+            "maxItems": 17,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "before_run",
+                "after_run",
+                "on_run_error",
+                "on_tick",
+                "before_validation",
+                "after_validation",
+                "on_recovery",
+                "on_task_complete",
+                "on_task_stop",
+                "on_escalation",
+                "codex_pre_tool",
+                "codex_post_tool",
+                "codex_before_model_turn",
+                "codex_after_model_turn",
+                "codex_session_start",
+                "codex_pre_compact",
+                "codex_post_compact"
+              ]
+            }
+          },
+          "argv": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            }
+          },
+          "phases": {
+            "default": [],
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "worker",
+                "supervisor",
+                "repair",
+                "validator"
+              ]
+            }
+          },
+          "timeoutSeconds": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "intervalSeconds": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "maxInvocations": {
+            "default": 1000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "failurePolicy": {
+            "default": "fail",
+            "type": "string",
+            "enum": [
+              "fail",
+              "continue"
+            ]
+          },
+          "matcher": {
+            "default": ".*",
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "events",
+          "argv",
+          "phases",
+          "timeoutSeconds",
+          "intervalSeconds",
+          "maxInvocations",
+          "failurePolicy",
+          "matcher"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
@@ -209,7 +317,8 @@
     "allowRepair",
     "repairTimeoutSeconds",
     "networkAccess",
-    "goalMonitoring"
+    "goalMonitoring",
+    "hooks"
   ],
   "additionalProperties": false
 }

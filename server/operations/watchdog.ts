@@ -5,6 +5,8 @@ import { OperationsStore, enqueue, stamp, taskEvent, uid } from './store.js';
 import { killAttempt, runnerIdentity } from './processes.js';
 import { blockerParser } from './codex.js';
 import { setupDoctor } from './doctor.js';
+import { HookService } from './hook-service.js';
+import { queueHooks, queueTickHooks } from './hooks.js';
 export const active = (a: Attempt) => ['starting', 'running'].includes(a.status);
 export function daemonHealthy(s: OperationsState) {
   return !!s.daemon && Date.now() - Date.parse(s.daemon.heartbeatAt) < 10000;
@@ -25,14 +27,22 @@ export class Watchdog {
           'Watchdog acquired durable ownership and will reconcile existing attempts.',
         );
       }
-      s.daemon = { owner: this.owner, pid: process.pid, heartbeatAt: stamp(), startedAt: stamp() };
+      s.daemon = {
+        owner: this.owner,
+        pid: process.pid,
+        heartbeatAt: stamp(),
+        startedAt: stamp(),
+        hookProtocol: 1,
+      };
       return true;
     });
   }
   tick() {
+    new HookService(this.store).tick(this.owner);
     const launches = this.store.update((s) => {
       if (s.daemon?.owner !== this.owner) return [] as { taskId: string; attemptId: string }[];
       s.daemon.heartbeatAt = stamp();
+      s.daemon.hookProtocol = 1;
       const launches: { taskId: string; attemptId: string }[] = [];
       for (const task of s.tasks) {
         if (
@@ -73,7 +83,45 @@ export class Watchdog {
           task.stopRequested = false;
           continue;
         }
+        if (
+          current?.status === 'starting' &&
+          !current.pid &&
+          current.hookGateRunIds?.length &&
+          !current.hookGatePassed
+        ) {
+          const gates = current.hookGateRunIds.map((id) => task.hookRuns?.find((r) => r.id === id));
+          if (gates.some((r) => !r?.applied)) {
+            current.heartbeatAt = stamp();
+            continue;
+          }
+          const denied = gates.find(
+            (r) =>
+              r &&
+              (r.result?.decision === 'escalate' ||
+                r.result?.decision === 'fail' ||
+                (r.status !== 'succeeded' && r.hook.failurePolicy === 'fail')),
+          );
+          if (denied) {
+            current.status = 'failed';
+            current.failure = `Before-run hook ${denied.hook.id}: ${denied.error ?? denied.result?.message ?? denied.result?.decision}`;
+            current.endedAt = stamp();
+            current.cleanupConfirmed = true;
+            taskEvent(task, 'observer', 'attempt.failed', current.failure);
+            if (denied.result?.decision === 'escalate') {
+              this.attention(s, task, current.failure);
+              continue;
+            }
+          } else {
+            current.hookGatePassed = true;
+            current.startedAt = stamp();
+            current.heartbeatAt = stamp();
+            current.lastProgressAt = stamp();
+            launches.push({ taskId: task.id, attemptId: current.id });
+            continue;
+          }
+        }
         if (current && active(current)) {
+          if (current.status === 'running') queueTickHooks(task, current);
           if (
             current.phase === 'worker' &&
             (!current.lastObservedAt || Date.now() - Date.parse(current.lastObservedAt) >= 60000)
@@ -279,6 +327,7 @@ export class Watchdog {
         if (a && a.status === 'starting' && !a.pid) a.pid = child.pid ?? null;
       });
     }
+    new HookService(this.store).tick(this.owner);
   }
   private retryAvailable(t: ManagedTask) {
     return t.attempts.filter((a) => a.phase === 'worker').length <= t.config.maxRetries;
@@ -352,6 +401,9 @@ export class Watchdog {
           ? 'supervising'
           : 'repairing';
     taskEvent(t, 'system', 'attempt.scheduled', `${phase} attempt durably scheduled.`);
-    launches.push({ taskId: t.id, attemptId: a.id });
+    a.hookGateRunIds = queueHooks(t, 'before_run', a, `${a.id}:before_run`);
+    if (phase === 'validator')
+      a.hookGateRunIds.push(...queueHooks(t, 'before_validation', a, `${a.id}:before_validation`));
+    if (!a.hookGateRunIds.length) launches.push({ taskId: t.id, attemptId: a.id });
   }
 }

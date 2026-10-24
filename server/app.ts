@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { randomUUID, createHash } from 'node:crypto';
 import { applicationRoot } from './runtime.js';
-import { withDefaults } from './operations/config.js';
+import { withDefaults, validateConfig } from './operations/config.js';
 import { ControlPlane, DomainError } from './control-plane.js';
 import { doctor } from './doctor.js';
 import { OperationsStore } from './operations/store.js';
@@ -13,6 +13,7 @@ import { configureTelegram, queueTestMessage } from './operations/telegram.js';
 import { daemonHealthy } from './operations/watchdog.js';
 import {
   ensureDaemon,
+  ensureHookSupport,
   serviceStatus,
   installService,
   uninstallService,
@@ -192,22 +193,28 @@ export function createApp(
       ensureDaemon(operations);
       res.status(201).json(task);
     });
-    app.post('/api/tasks', (req, res) => {
-      const task = createTask(operations, req.body);
+    app.post('/api/tasks', async (req, res) => {
+      const config = validateConfig(req.body);
+      await ensureHookSupport(operations, config);
+      const task = createTask(operations, config);
       ensureDaemon(operations);
       res.status(201).json(task);
     });
-    app.patch('/api/tasks/:id', (req, res) => {
+    app.patch('/api/tasks/:id', async (req, res) => {
       const body = z
         .object({ config: z.unknown(), revision: z.number().int() })
         .strict()
         .parse(req.body);
-      res.json(
-        changeTask(operations, req.params.id as string, 'configure', body.config, body.revision),
-      );
+      const config = validateConfig(body.config);
+      await ensureHookSupport(operations, config);
+      res.json(changeTask(operations, req.params.id as string, 'configure', config, body.revision));
     });
-    app.post('/api/tasks/:id/:action', (req, res) => {
+    app.post('/api/tasks/:id/:action', async (req, res) => {
       const action = z.enum(['stop', 'retry']).parse(req.params.action);
+      if (action === 'retry') {
+        const task = operations.read().tasks.find((t) => t.id === req.params.id);
+        if (task) await ensureHookSupport(operations, task.config);
+      }
       res.json(changeTask(operations, req.params.id as string, action));
       ensureDaemon(operations);
     });

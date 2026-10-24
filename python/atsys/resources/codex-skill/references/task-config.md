@@ -10,6 +10,7 @@ The JSON fields include:
 - `requiredArtifacts`: optional relative file paths whose presence/content digests should be recorded.
 - `timeoutSeconds`, `taskTimeoutSeconds`: worker-attempt and total-task deadlines.
 - `heartbeatTimeoutSeconds`: runner liveness window. `activityTimeoutSeconds`: optional output-silence deadline; set 0 for legitimately quiet tasks. New Codex tasks with `goalMonitoring=true` and no explicit `progressFile` get a unique task-local milestone file and ten-minute progress window on submission. Generic commands must supply their own progress source. Progress is worker-reported, not independently verified completion.
+- `hooks`: opt-in callback definitions with event names, exact argv, phases, timeouts, intervals, invocation limits and fail/continue policy. Read [hooks](hooks.md) when configuring these; native Codex callbacks need normal trust review.
 - `networkAccess`: false by default. Explicitly authorize Codex worker/repair networking only within the user's task scope (also available as template flag `--network-access`). The supervisor stays read-only.
 - `recovery`: supervised/restart/notify. `maxRetries`: bounded worker retries. `backoffSeconds`: delay between retries.
 - `supervisorModel`, `supervisorEffort`, `supervisorTimeoutSeconds`, `maxSupervisorCalls`: bounded read-only diagnosis.

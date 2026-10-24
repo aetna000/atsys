@@ -1,9 +1,19 @@
-import type { ManagedTask } from '../../shared/operations.js';
+import type { ManagedTask, TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
 import { validateConfig } from './config.js';
 import { OperationsStore, stamp, taskEvent, uid } from './store.js';
+export function requireHookSupport(store: OperationsStore, config: TaskConfig) {
+  if (!config.hooks.length) return;
+  const daemon = store.read().daemon;
+  if (!daemon || Date.now() - Date.parse(daemon.heartbeatAt) >= 10000 || daemon.hookProtocol !== 1)
+    throw new DomainError(
+      'Lifecycle hooks require a healthy upgraded watchdog. Restart the AtSys watchdog with this runtime before submitting or changing hook tasks.',
+      409,
+    );
+}
 export function createTask(store: OperationsStore, input: unknown) {
   const config = validateConfig(input);
+  requireHookSupport(store, config);
   return store.update((s) => {
     const task: ManagedTask = {
       id: uid('task'),
@@ -39,6 +49,11 @@ export function changeTask(
   revision?: number,
 ) {
   const config = action === 'configure' ? validateConfig(input) : undefined;
+  if (config) requireHookSupport(store, config);
+  if (action === 'retry') {
+    const task = store.read().tasks.find((t) => t.id === id);
+    if (task) requireHookSupport(store, task.config);
+  }
   return store.update((s) => {
     const t = s.tasks.find((t) => t.id === id);
     if (!t) throw new DomainError('Task not found', 404);

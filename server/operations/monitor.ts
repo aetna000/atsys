@@ -1,5 +1,5 @@
 import type { ManagedTask } from '../../shared/operations.js';
-import { formatTaskStatus } from '../../shared/task-presentation.js';
+import { formatTaskStatus, readableTaskLog } from '../../shared/task-presentation.js';
 import { OperationsStore } from './store.js';
 import { DomainError } from '../control-plane.js';
 
@@ -48,6 +48,7 @@ export async function watchTask(
         task.revision,
         task.events[0]?.id,
         worker?.progress,
+        readableTaskLog(task, 3),
       ]);
       lastFrame = formatTaskStatus(
         task,

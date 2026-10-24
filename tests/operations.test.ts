@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, mkdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  statSync,
+  mkdirSync,
+  existsSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { OperationsStore, stamp } from '../server/operations/store.js';
@@ -318,24 +326,41 @@ test('missing required artifacts and no-output stalls cannot claim completion', 
 
 test('operator retry after stop starts a worker, not a supervisor for the interrupted attempt', async () =>
   fixture(async ({ submit, until, store, root }) => {
-    const task = submit({
-      argv: [
-        process.execPath,
-        '-e',
-        `if(!require('fs').existsSync('ready'))setInterval(()=>{},1000)`,
-      ],
-      recovery: 'supervised',
-    });
-    await until(task.id, (t) => t.attempts[0]?.status === 'running');
-    changeTask(store, task.id, 'stop');
-    await until(task.id, (t) => t.status === 'stopped');
-    writeFileSync(join(root, 'ready'), 'yes');
-    changeTask(store, task.id, 'retry');
-    const done = await until(task.id, (t) => t.status === 'completed');
-    assert.deepEqual(
-      done.attempts.map((a) => a.phase),
-      ['worker', 'worker'],
+    // Supervised setup requires an executable, but this scenario must never invoke
+    // a supervisor. Do not depend on (or accidentally call) the operator's Codex.
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'codex'),
+      `#!${process.execPath}\nrequire('fs').writeFileSync('unexpected-supervisor','called');process.exit(97);`,
+      { mode: 0o700 },
     );
+    const old = process.env.PATH;
+    process.env.PATH = bin + ':' + (old ?? '');
+    try {
+      const task = submit({
+        argv: [
+          process.execPath,
+          '-e',
+          `if(!require('fs').existsSync('ready'))setInterval(()=>{},1000)`,
+        ],
+        recovery: 'supervised',
+      });
+      await until(task.id, (t) => t.attempts[0]?.status === 'running');
+      changeTask(store, task.id, 'stop');
+      await until(task.id, (t) => t.status === 'stopped');
+      writeFileSync(join(root, 'ready'), 'yes');
+      changeTask(store, task.id, 'retry');
+      const done = await until(task.id, (t) => t.status === 'completed');
+      assert.deepEqual(
+        done.attempts.map((a) => a.phase),
+        ['worker', 'worker'],
+      );
+      assert.equal(existsSync(join(root, 'unexpected-supervisor')), false);
+    } finally {
+      if (old === undefined) delete process.env.PATH;
+      else process.env.PATH = old;
+    }
   }));
 
 test('unsupported escalation gets bounded diagnostic follow-up and recovery guidance reaches Codex worker', async () =>

@@ -65,13 +65,54 @@ class InstalledWheelTests(unittest.TestCase):
 
     def test_wheel_contains_runtime_and_uses_bundled_node(self):
         self.assertIn("site-packages", str(PACKAGE))
-        for name in ("cli.mjs", "index.mjs", "daemon.mjs", "attempt-runner.mjs", "dist/index.html", "THIRD_PARTY_NOTICES.txt"):
+        for name in ("cli.mjs", "index.mjs", "daemon.mjs", "attempt-runner.mjs", "hook-runner.mjs", "native-hook.mjs", "dist/index.html", "THIRD_PARTY_NOTICES.txt"):
             self.assertTrue((RUNTIME / name).is_file(), name)
         self.assertIn("nodejs_wheel", node_executable())
         schema = json.loads(self.cli("task", "schema").stdout)
         self.assertIn("validationArgv", schema["properties"])
+        self.assertIn("hooks", schema["properties"])
         self.assertEqual(self.cli("--version").stdout.strip(), __version__)
         self.assertEqual(json.loads((RUNTIME / "build.json").read_text())["version"], __version__)
+
+    def test_installed_python_hook_gates_a_real_task(self):
+        script=self.project/'task_hooks.py'
+        script.write_text('''from pathlib import Path
+from atsys.hooks import Hooks, HookResult
+hooks=Hooks()
+@hooks.on.before_run
+async def ready(ctx):
+    Path('hook-proof').write_text(ctx.invocation_id)
+    return HookResult(message='Installed Python callback passed')
+''')
+        config=json.loads(self.cli('task','template','--objective','Verify packaged lifecycle hooks').stdout)
+        config.update(worker='command',goalMonitoring=False,recovery='notify',argv=[node_executable(),'-e',"if(!require('fs').existsSync('hook-proof'))process.exit(7)"],validationArgv=[node_executable(),'-e',"if(!require('fs').readFileSync('hook-proof','utf8').startsWith('hook-'))process.exit(8)"],hooks=[{'id':'python-ready','events':['before_run'],'phases':['worker'],'argv':[sys.executable,'-m','atsys.hooks','run',str(script)+':hooks'],'timeoutSeconds':10}])
+        task_path=self.project/'hook-task.json';task_path.write_text(json.dumps(config))
+        task_id=json.loads(self.cli('task','submit','--config',str(task_path)).stdout)['id']
+        for _ in range(60):
+            task=json.loads(self.cli('task','show',task_id).stdout)
+            if task['status'] in ('completed','needs_attention'):break
+            time.sleep(.15)
+        self.assertEqual(task['status'],'completed',task)
+        self.assertEqual(task['hookRuns'][0]['result']['message'],'Installed Python callback passed')
+        self.assertEqual(task['attempts'][-1]['validation']['passed'],True)
+
+    def test_codex_hook_installation_preserves_existing_definitions_and_local_edits(self):
+        target=self.project/'.codex/hooks.json';target.parent.mkdir()
+        other={'hooks':[{'type':'command','command':'echo existing-project-hook'}]}
+        target.write_text(json.dumps({'hooks':{'SessionStart':[other]}}))
+        config=json.loads(self.cli('task','template','--objective','Verify native hook installation').stdout)
+        config.update(validationArgv=[node_executable(),'-e','process.exit(0)'],hooks=[{'id':'native-policy','events':['codex_pre_tool'],'argv':[node_executable(),'-e',"console.log('{}')"]}])
+        path=self.project/'native-task.json';path.write_text(json.dumps(config))
+        for _ in range(2):self.cli('hooks','codex-install','--config',str(path))
+        document=json.loads(target.read_text())
+        self.assertIn(other,document['hooks']['SessionStart'])
+        self.assertEqual(len(document['hooks']['PreToolUse']),1)
+        self.cli('hooks','codex-install','--remove')
+        self.assertEqual(json.loads(target.read_text()),{'hooks':{'SessionStart':[other]}})
+        self.cli('hooks','codex-install','--config',str(path))
+        document=json.loads(target.read_text());document['hooks']['PreToolUse'][0]['hooks'][0]['command']='my local customization';target.write_text(json.dumps(document))
+        self.assertNotEqual(self.cli('hooks','codex-install','--remove',check=False).returncode,0)
+        self.assertIn('my local customization',target.read_text())
 
     def test_init_is_idempotent_and_preserves_project_instructions(self):
         original = "# My instructions\nPreserve project behavior.\n"

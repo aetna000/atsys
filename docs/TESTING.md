@@ -6,6 +6,8 @@ Current priority: qualify the published runtime for ordinary coding work. Codex 
 
 The 0.2.0 release passed 31 runtime tests, 18 desktop/mobile browser checks, installed-package checks on Linux/macOS and a clean PyPI installation. macOS checks include watchdog termination and OS restart. [Release evidence](packaging-verification.json) and [native supervisor/repair evidence](native-codex-verification.json) record the scope of those checks.
 
+The 0.3.0b1 beta adds bounded lifecycle/native Codex hooks, optional AtBot observation and operational UI/log cleanup. [Candidate verification](releases/v0.3.0b1-verification.json) records runtime/CLI, desktop/mobile, SDK and installed-wheel checks. [Native hook verification](native-hooks-verification.json) records an actual Codex tool denial followed by independently validated completion. These are accelerated checks, not multi-hour qualification.
+
 ## Qualification checklist
 
 - [x] Run an actual Codex coding worker through the published CLI in an isolated Git project; preserve an unrelated edit and require an independent acceptance command plus artifact evidence. [Published-package coding acceptance](published-coding-acceptance.json) records a real duration-parser implementation, five passing test groups and unchanged unrelated/test files.

@@ -1,0 +1,7 @@
+# Task lifecycle hooks
+
+Users can run project-owned callbacks before execution/validation, after outcomes, during long quiet work, and when recovery or escalation occurs. Callbacks receive a versioned JSON context and return bounded messages, progress or a fail/escalate decision. No callback can mark work completed, authorize repair, change task policy or extend deadlines.
+
+Support executable argv and a Python decorator SDK. Offer an optional AtBot observer bridge using its Pydantic AI provider and configured capabilities; do not require AtBot, AtMem or a model for ordinary hooks. Integrate native Codex pre/post tool callbacks and model turn boundaries, carrying reported model metadata. Trust remains explicitly reviewed in Codex; internal model HTTP requests are outside the native protocol. Only AtBot/Pydantic AI provides per-model-request hooks. Require an upgraded watchdog capability handshake before accepting hook tasks.
+
+Acceptance: callbacks have durable snapshots, IDs, deadlines and receipts; pre-execution gates run before the workload; quiet-work callbacks do not block the watchdog or forge heartbeat/progress; failures/timeouts remain visible; interrupted callback deliveries are not silently replayed; independent validation and recovery limits remain authoritative. Configuration and receipts are available through CLI/API and desktop/mobile UI. Built wheels include the dispatcher, SDK and examples.

@@ -7,6 +7,8 @@ import { applicationRoot, runtimeEntry, runtimeArgs } from '../runtime.js';
 import type { ServiceStatus } from '../../shared/operations.js';
 import { OperationsStore } from './store.js';
 import { daemonHealthy } from './watchdog.js';
+import { requireHookSupport } from './tasks.js';
+import type { TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
 const root = applicationRoot;
 const entry = runtimeEntry('daemon');
@@ -53,6 +55,13 @@ export function ensureDaemon(store: OperationsStore) {
   });
   child.on('error', () => {});
   child.unref();
+}
+export async function ensureHookSupport(store: OperationsStore, config: TaskConfig) {
+  if (!config.hooks.length) return;
+  ensureDaemon(store);
+  for (let i = 0; i < 50 && !daemonHealthy(store.read()); i++)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  requireHookSupport(store, config);
 }
 const xml = (s: string) =>
   s

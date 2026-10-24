@@ -22,6 +22,8 @@ await build({
     index: 'server/index.ts',
     daemon: 'server/operations/daemon.ts',
     'attempt-runner': 'server/operations/attempt-runner.ts',
+    'hook-runner': 'server/operations/hook-runner.ts',
+    'native-hook': 'server/operations/native-hook.ts',
   },
   outdir: output,
   bundle: true,
@@ -39,6 +41,7 @@ await build({
 cpSync(join(root, 'dist'), join(output, 'dist'), { recursive: true });
 mkdirSync(join(output, 'examples'));
 cpSync(join(root, 'examples/checkpoint-task.mjs'), join(output, 'examples/checkpoint-task.mjs'));
+cpSync(join(root, 'examples/hooks'), join(output, 'examples/hooks'), { recursive: true });
 cpSync(
   join(root, 'examples/coding-task.json'),
   join(root, 'python/atsys/resources/coding-task.json'),
@@ -90,9 +93,16 @@ writeFileSync(
   join(output, 'build.json'),
   JSON.stringify(
     {
-      version: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
+      version: readFileSync(join(root, 'pyproject.toml'), 'utf8').match(/^version = "([^"]+)"$/m)[1],
       node: '24.x',
-      entries: ['cli.mjs', 'index.mjs', 'daemon.mjs', 'attempt-runner.mjs'],
+      entries: [
+        'cli.mjs',
+        'index.mjs',
+        'daemon.mjs',
+        'attempt-runner.mjs',
+        'hook-runner.mjs',
+        'native-hook.mjs',
+      ],
     },
     null,
     2,

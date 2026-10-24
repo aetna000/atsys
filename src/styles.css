@@ -4058,3 +4058,57 @@ td small {
     display: none;
   }
 }
+
+.ops-activity-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 1fr);
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+.ops-activity {
+  max-height: 440px;
+  overflow: auto;
+  overflow-anchor: none;
+  border-radius: 9px;
+  background: #18251f;
+  color: #d9e4dc;
+  padding: 8px 18px;
+}
+.ops-activity-entry {
+  padding: 14px 0;
+  border-bottom: 1px solid #3a4d42;
+}
+.ops-activity-entry:last-child {
+  border-bottom: 0;
+}
+.ops-activity-meta {
+  display: flex;
+  gap: 12px;
+  color: #b5cbbc;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.ops-activity-entry.error .ops-activity-meta {
+  color: #ffb9aa;
+}
+.ops-activity-entry pre {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 0;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.7 'IBM Plex Mono',
+    monospace;
+}
+@media (max-width: 600px) {
+  .ops-activity-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.header-actions > .MuiIconButton-root {
+  display: inline-flex;
+}

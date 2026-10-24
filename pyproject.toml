@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atsys"
-version = "0.2.1"
+version = "0.3.0b1"
 description = "Durable coding-task supervision with Codex integration and a local web dashboard"
 readme = "python/README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,9 @@ classifiers = [
 
 [project.scripts]
 atsys = "atsys.cli:main"
+
+[project.optional-dependencies]
+atbot = ["atbots>=0.2.0,<0.3"]
 
 [project.urls]
 Homepage = "https://github.com/aetna000/atsys"

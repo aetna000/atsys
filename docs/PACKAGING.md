@@ -4,6 +4,8 @@ The 0.2.1 wheel packages this checkout's operational runtime and web dashboard. 
 
 ## Install the published release
 
+The hook/UI beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b1`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b1.md) and restart the upgraded watchdog before submitting hook tasks.
+
 ```sh
 python -m pip install --upgrade atsys==0.2.1
 cd /path/to/your/project

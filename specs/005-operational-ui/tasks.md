@@ -1,0 +1,6 @@
+- [x] Remove sample/unavailable UI routes, navigation and settings
+- [x] Decode structured activity and show newest entries first in browser/terminal
+- [x] Show all task attempts with readable command/message context and working filters
+- [x] Refresh terminal output without heartbeat spam or task mutation
+- [x] Exercise real controls and error recovery at desktop/mobile sizes
+- [x] Build and verify the installed candidate package; document limits

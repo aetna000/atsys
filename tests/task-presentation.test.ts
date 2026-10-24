@@ -9,6 +9,9 @@ import { withDefaults } from '../server/operations/config.js';
 import { createTask } from '../server/operations/tasks.js';
 import {
   formatTaskStatus,
+  attemptLogEntries,
+  taskLogEntries,
+  readableTaskLog,
   plainText,
   readableAttemptLog,
   taskPresentation,
@@ -204,7 +207,7 @@ test('CLI human status/watch/logs preserve task show JSON and never mutate execu
       JSON.parse(invoke(['task', 'status', f.task.id, '--json'])).status,
       'needs_attention',
     );
-    assert.match(invoke(['task', 'logs', f.task.id]), /No readable messages/);
+    assert.match(invoke(['task', 'logs', f.task.id]), /supervisor: succeeded/);
     assert.equal(f.store.read().tasks[0].attempts.length, 2);
     assert.equal(f.store.read().tasks[0].stopRequested, false);
   } finally {
@@ -215,6 +218,8 @@ test('live monitor suppresses heartbeat-only noise and closing it leaves executi
   const f = fixture();
   try {
     f.task.status = 'running';
+    f.task.attempts = [f.task.attempts[0]];
+    f.task.attempts[0].status = 'running';
     f.store.update((s) => {
       s.tasks[0] = f.task;
     });
@@ -251,14 +256,96 @@ test('live monitor suppresses heartbeat-only noise and closing it leaves executi
     );
     try {
       await new Promise((r) => setTimeout(r, 2200));
+      assert.equal(text.split('ATSYS · TASK MONITOR').length - 1, 1);
+      f.store.update((s) => {
+        s.tasks[0].attempts[0].output = JSON.stringify({
+          message: 'Fresh output appears near the top',
+        });
+      });
+      await new Promise((r) => setTimeout(r, 1200));
     } finally {
       clearInterval(heartbeat);
       child.kill('SIGTERM');
       await exited;
     }
-    assert.equal(text.split('ATSYS · TASK MONITOR').length - 1, 1);
+    assert.equal(text.split('ATSYS · TASK MONITOR').length - 1, 2);
+    assert.match(text, /Latest: worker: Fresh output appears near the top/);
     assert.equal(f.store.read().tasks[0].status, 'running');
     assert.equal(f.store.read().tasks[0].stopRequested, false);
+  } finally {
+    f.close();
+  }
+});
+
+test('activity decodes JSON messages and tools newest first while preserving multiline text', () => {
+  const output = [
+    JSON.stringify({ level: 'info', message: 'Earlier milestone' }),
+    JSON.stringify({
+      type: 'item.started',
+      item: { type: 'command_execution', command: 'npm test', status: 'in_progress' },
+    }),
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        type: 'command_execution',
+        command: 'npm test',
+        status: 'completed',
+        exit_code: 0,
+        aggregated_output: 'PRIVATE NESTED TOOL BODY',
+      },
+    }),
+    JSON.stringify({
+      type: 'item.completed',
+      item: { type: 'agent_message', text: 'Latest milestone\nAcceptance checks passed.' },
+    }),
+  ].join('\n');
+  const entries = attemptLogEntries(output);
+  assert.equal(entries[0].message, 'Latest milestone\nAcceptance checks passed.');
+  assert.equal(entries[1].message, 'Finished (exit 0): npm test');
+  assert.equal(entries.at(-1)!.message, 'Earlier milestone');
+  assert.ok(!readableAttemptLog(output).includes('aggregated_output'));
+  assert.ok(!readableAttemptLog(output).includes('PRIVATE NESTED'));
+  assert.equal(
+    readableAttemptLog(
+      JSON.stringify({ level: 'info', message: 'Formatted build output' }, null, 2),
+    ),
+    'Formatted build output',
+  );
+});
+test('all-attempt activity keeps worker history visible after independent validation', () => {
+  const f = fixture();
+  try {
+    f.task.attempts[0].output = JSON.stringify({ message: 'Worker implemented the feature' });
+    f.task.attempts.push({
+      ...f.task.attempts[0],
+      id: 'validator',
+      phase: 'validator',
+      status: 'succeeded',
+      output: JSON.stringify({ message: 'Validator checked the result' }),
+      validation: { passed: true, detail: 'Independent validation passed' },
+    });
+    const entries = taskLogEntries(f.task);
+    assert.equal(entries[0].phase, 'validator');
+    assert.ok(
+      entries.some(
+        (entry) => entry.phase === 'worker' && entry.message === 'Worker implemented the feature',
+      ),
+    );
+    assert.match(readableTaskLog(f.task), /Validator checked the result/);
+    assert.ok(taskLogEntries(f.task, 20, 'worker').every((entry) => entry.phase === 'worker'));
+  } finally {
+    f.close();
+  }
+});
+
+test('notify-only and terminal tasks never claim a standby Codex supervisor', () => {
+  const f = fixture();
+  try {
+    f.task.attempts = [f.task.attempts[0]];
+    assert.match(taskPresentation(f.task).supervisor, /Disabled; notify-only/);
+    f.task.config.recovery = 'supervised';
+    f.task.status = 'completed';
+    assert.match(taskPresentation(f.task).supervisor, /Inactive/);
   } finally {
     f.close();
   }

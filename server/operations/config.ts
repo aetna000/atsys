@@ -3,6 +3,7 @@ import { realpathSync, statSync } from 'node:fs';
 import { isAbsolute, resolve, relative, sep } from 'node:path';
 import { taskDefaults, type TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
+import { hookSchema } from './hooks.js';
 const effort = z.enum(['low', 'medium', 'high', 'xhigh']);
 const arg = z
   .string()
@@ -41,6 +42,7 @@ export const configSchema = z
     repairTimeoutSeconds: z.number().int().min(5).max(7200),
     networkAccess: z.boolean().default(false),
     goalMonitoring: z.boolean().default(true),
+    hooks: z.array(hookSchema).max(16).default([]),
   })
   .strict();
 export function inside(root: string, path: string) {
@@ -49,6 +51,8 @@ export function inside(root: string, path: string) {
 }
 export function validateConfig(input: unknown): TaskConfig {
   const c = configSchema.parse(input);
+  if (new Set(c.hooks.map((h) => h.id)).size !== c.hooks.length)
+    throw new DomainError('Hook IDs must be unique within a task', 400);
   try {
     c.cwd = realpathSync(c.cwd);
     if (!statSync(c.cwd).isDirectory()) throw new Error();
@@ -69,8 +73,12 @@ export function validateConfig(input: unknown): TaskConfig {
     throw new DomainError('A validation command is required', 400);
   if (c.validator === 'benchmark-json' && !c.artifact)
     throw new DomainError('Benchmark validation requires an artifact path', 400);
-  if (c.progressTimeoutSeconds && !c.progressFile)
-    throw new DomainError('Stall detection requires an explicit progress JSON file', 400);
+  if (
+    c.progressTimeoutSeconds &&
+    !c.progressFile &&
+    !c.hooks.some((h) => h.events.includes('on_tick'))
+  )
+    throw new DomainError('Stall detection requires a progress JSON file or an on_tick hook', 400);
   return c;
 }
 export const withDefaults = (input: Partial<TaskConfig>) =>

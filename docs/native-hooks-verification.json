@@ -1,0 +1,41 @@
+{
+  "verifiedAt": "2026-10-24T05:39:42.119Z",
+  "runtime": "installed AtSys 0.3.0 candidate wheel",
+  "codexVersion": "codex-cli 0.163.0",
+  "taskId": "task-d80ef93a-0f4d-46d3-873e-f3581d242468",
+  "status": "completed",
+  "modelsReported": [
+    "gpt-6.1-sol"
+  ],
+  "nativeEvents": {
+    "codex_before_model_turn": 1,
+    "codex_pre_tool": 5,
+    "codex_post_tool": 4,
+    "codex_after_model_turn": 1
+  },
+  "toolsObserved": [
+    "Bash",
+    "apply_patch"
+  ],
+  "explicitDenials": 1,
+  "forbiddenMarkerAbsent": true,
+  "validatorAndHookSourceUnchanged": true,
+  "nativeBridgeConnected": true,
+  "independentValidation": {
+    "passed": true,
+    "detail": "Independent validation command exited zero.",
+    "artifacts": [
+      {
+        "path": "math.cjs",
+        "digest": "6eab775aee4f27963517086b4ce4fdb50b4274ef4ff8eca7e71875ceab2210cb"
+      }
+    ]
+  },
+  "trust": "Generated project definitions reviewed and trusted using the native /hooks interface; no trust bypass flag.",
+  "limits": [
+    "Turn events are not per-internal-model-HTTP-request hooks.",
+    "Only supported native Codex tool paths are covered.",
+    "This is an accelerated local task, not an overnight soak test.",
+    "Optional AtBot lifecycle tests use Pydantic AI TestModel, not an external model endpoint."
+  ]
+}

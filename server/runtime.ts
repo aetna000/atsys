@@ -8,6 +8,8 @@ const sourceEntries: Record<string, string> = {
   index: 'server/index.ts',
   daemon: 'server/operations/daemon.ts',
   'attempt-runner': 'server/operations/attempt-runner.ts',
+  'hook-runner': 'server/operations/hook-runner.ts',
+  'native-hook': 'server/operations/native-hook.ts',
 };
 export function runtimeEntry(name: keyof typeof sourceEntries) {
   return packaged

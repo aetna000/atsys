@@ -58,6 +58,11 @@ jobs:
           python -m venv "$RUNNER_TEMP/atsys-wheel-test"
           "$RUNNER_TEMP/atsys-wheel-test/bin/python" -m pip install release/*.whl
           "$RUNNER_TEMP/atsys-wheel-test/bin/python" tests/packaging/test_install.py -v
+          "$RUNNER_TEMP/atsys-wheel-test/bin/python" tests/packaging/test_hooks_sdk.py -v
+      - name: Verify optional AtBot and Pydantic AI hooks without model calls
+        run: |
+          "$RUNNER_TEMP/atsys-wheel-test/bin/python" -m pip install 'atbots>=0.2.0,<0.3'
+          "$RUNNER_TEMP/atsys-wheel-test/bin/python" tests/packaging/test_atbot_hooks.py -v
       - uses: actions/upload-artifact@v4
         with:
           name: release-distributions

@@ -101,6 +101,7 @@ export function setupDoctor(cwd: string, config?: TaskConfig): SetupReport {
       ...(config.worker === 'command' && config.resumeArgv.length
         ? [{ name: 'resume executable', command: config.resumeArgv[0] }]
         : []),
+      ...(config.hooks ?? []).map((h) => ({ name: `hook ${h.id} executable`, command: h.argv[0] })),
     ];
     for (const item of required)
       check(item.name, () => {

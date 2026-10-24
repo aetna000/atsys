@@ -252,6 +252,11 @@ def main(argv: list[str] | None = None) -> int:
   atsys ui [--no-open] [--port 4310]     Start/open bundled dashboard
   atsys task template --objective ... [--output .atsys/tasks/task.json]
   atsys task schema                     Print installed task JSON schema
+  atsys hooks events                    List task and native Codex callback events
+  atsys hooks run file.py:hooks         Run a project callback (JSON stdin/stdout)
+  atsys hooks codex-install --config task.json
+                                       Preserve existing hooks; install native bridge for review
+  atsys hooks atbot --config atbot.json  Optional Pydantic AI observer callback
   atsys task submit --config task.json  Hand off a task and return immediately
   atsys task list | show ID | stop ID | retry ID
   atsys task status [ID] [--json]       Readable progress, blocker and next action
@@ -270,6 +275,12 @@ Persistent data: {data_directory()}
             return 0
         if args[0] == "init":
             return initialize(args[1:])
+        if args[:2] == ["hooks", "codex-install"]:
+            from .codex_hooks import install
+            return install(args[2:])
+        if args[0] == "hooks" and args[1:2] != ["codex-config"]:
+            from .hooks import main as hooks_main
+            return hooks_main(args[1:])
         if args[0] == "integrate":
             parser = argparse.ArgumentParser(prog="atsys integrate")
             parser.add_argument("--project", type=Path, default=Path.cwd())

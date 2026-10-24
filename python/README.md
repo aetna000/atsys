@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.2.1
+pip install --upgrade atsys==0.3.0b1
 cd /path/to/your/project
 atsys init
 ```
@@ -36,3 +36,7 @@ Version 0.2.1 adds setup checks and a private write/read pilot, progress-stall d
 Tasks run independently of the terminal and dashboard. Codex diagnosis is read-only; separately authorized repair uses workspace-write. Completion requires the configured validator. Telegram is opt-in through the dashboard. Local sleep/power loss suspends work; generic commands run as the local user. Built-in OS service installation currently targets macOS; Linux requires a separately configured service manager. Windows process supervision is unsupported.
 
 Use `atsys init --no-service --no-dashboard` for integration-only setup, `atsys integrate` to install just the Codex skill, and `atsys integrate --remove` to remove the unmodified managed skill. Reopen the Codex session if it was started before the skill was installed.
+
+The 0.3.0b1 beta release adds project lifecycle callbacks (`atsys hooks run file.py:hooks`), native Codex tool/turn hooks and optional `atsys[atbot]` observers. Configure these in task `hooks`; run `atsys hooks events` for supported events. Native Codex hooks need normal `/hooks` trust review after `atsys hooks codex-install --config task.json`. Internal Codex model HTTP requests are not exposed.
+
+The 0.3.0b1 beta UI exposes operational tasks and service/Telegram settings. Activity decodes structured logs, shows newest entries first across all attempts, and supports attempt/text filters and pause display. `atsys task logs ID` shows the same readable activity; the live monitor places the latest message near the top. Raw retained output remains available explicitly.

@@ -28,10 +28,18 @@ import {
   ArrowRight,
   Bell,
   Settings2,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, useConsole } from '../api';
-import { readableAttemptLog, shortText, taskPresentation } from '../../shared/task-presentation';
+import { api } from '../api';
+import {
+  readableMessage,
+  taskLogEntries,
+  shortText,
+  taskPresentation,
+  type ActivityEntry,
+} from '../../shared/task-presentation';
 import { Badge, PageTitle, Panel, Time, Empty } from '../components/common';
 import {
   taskDefaults,
@@ -40,11 +48,18 @@ import {
   type OperationsView,
   type TelegramConfig,
 } from '../../shared/operations';
-export function Tasks() {
-  const { notify, search } = useConsole();
+export function Tasks({
+  search,
+  notify,
+  settings = false,
+}: {
+  search: string;
+  notify: (message: string, error?: boolean) => void;
+  settings?: boolean;
+}) {
   const [view, setView] = useState<OperationsView | null>(null);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState(0);
+  const tab = settings ? 1 : 0;
   const [form, setForm] = useState<TaskConfig | null>(null);
   const [editing, setEditing] = useState<ManagedTask | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +83,8 @@ export function Tasks() {
     try {
       const result = await api<ManagedTask>(path, body, method);
       await refresh();
+      if (path === '/telegram') notify('Telegram configuration saved');
+      if (path.startsWith('/service/')) notify('Watchdog service request completed');
       return result;
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Action failed', true);
@@ -97,17 +114,26 @@ export function Tasks() {
     return (
       <Alert severity={error ? 'error' : 'info'}>
         {error || 'Connecting to the task supervisor…'}
+        {error && <Button onClick={() => void refresh()}>Retry connection</Button>}
       </Alert>
     );
   return (
     <div className="operations-page">
       <PageTitle
         eyebrow="DURABLE TASK SUPERVISION"
-        title={selected ? selected.config.name : 'Work that stays looked after'}
+        title={
+          settings
+            ? 'Service & alerts'
+            : selected
+              ? selected.config.name
+              : 'Work that stays looked after'
+        }
         description={
-          selected
-            ? selected.config.objective
-            : 'Run the task. Watch its progress. Recover within policy. Bring you in when needed.'
+          settings
+            ? 'Configure watchdog restart protection and optional Telegram alerts.'
+            : selected
+              ? selected.config.objective
+              : 'Run the task. Watch its progress. Recover within policy. Bring you in when needed.'
         }
         action={
           <>
@@ -128,13 +154,30 @@ export function Tasks() {
           </>
         }
       />
+      {taskId && !selected && (
+        <Alert severity="warning">
+          This task was not found.{' '}
+          <Button onClick={() => navigate('/tasks')}>View managed tasks</Button>
+        </Alert>
+      )}
       {error && (
-        <Alert severity="warning">Connection lost. These records may be stale. {error}</Alert>
+        <Alert
+          severity="warning"
+          action={<Button onClick={() => void refresh()}>Retry connection</Button>}
+        >
+          Connection lost. These records may be stale. {error}
+        </Alert>
       )}
       <div className="ops-health-strip">
         <span>
-          <i className={view.daemonHealthy ? 'ops-dot healthy' : 'ops-dot failed'} />
-          <strong>{view.daemonHealthy ? 'Watchdog online' : 'Watchdog heartbeat missing'}</strong>
+          <i className={!error && view.daemonHealthy ? 'ops-dot healthy' : 'ops-dot failed'} />
+          <strong>
+            {error
+              ? 'Watchdog status unavailable'
+              : view.daemonHealthy
+                ? 'Watchdog online'
+                : 'Watchdog heartbeat missing'}
+          </strong>
           {view.daemon && (
             <small>
               Heartbeat <Time value={view.daemon.heartbeatAt} />
@@ -150,14 +193,17 @@ export function Tasks() {
         <Button
           size="small"
           onClick={() => {
-            setTab(1);
-            navigate('/tasks');
+            navigate('/settings');
           }}
         >
           Manage service & alerts
         </Button>
       </div>
-      <Tabs value={tab} onChange={(_, v: number) => setTab(v)} aria-label="Task workspace views">
+      <Tabs
+        value={tab}
+        onChange={(_, v: number) => navigate(v ? '/settings' : '/tasks')}
+        aria-label="Task workspace views"
+      >
         <Tab label="Tasks & wiring" />
         <Tab label="Service & Telegram" />
       </Tabs>
@@ -165,6 +211,7 @@ export function Tasks() {
         <ServiceAlerts view={view} busy={busy} action={act} />
       ) : selected ? (
         <TaskDetail
+          key={selected.id}
           task={selected}
           busy={busy}
           action={act}
@@ -245,7 +292,7 @@ export function Tasks() {
           >
             {!tasks.length ? (
               <Empty
-                title="Delegate your first task"
+                title={search ? 'No matching tasks' : 'Delegate your first task'}
                 description="Delegate a feature, bug fix, refactor, test suite, build, migration, or script. AtSys keeps ownership through execution, validation and recovery."
                 action={<Button onClick={openNew}>Configure a task</Button>}
               />
@@ -418,6 +465,7 @@ function TaskDetail({
           </dl>
         </div>
       </Panel>
+      <TaskActivity task={t} />
       <div className="ops-wiring">
         <Wire
           icon={Terminal}
@@ -464,6 +512,54 @@ function TaskDetail({
           }
         />
       </div>
+      {!!(t.config.hooks?.length || t.hookRuns?.length) && (
+        <Panel title="Lifecycle hooks" eyebrow="BOUNDED CALLBACKS & RECEIPTS">
+          <div className="ops-panel-body">
+            <p>
+              {t.config.hooks?.length ?? 0} configured callbacks. Completion still requires the
+              declared acceptance check.
+            </p>
+            {(t.hookRuns ?? [])
+              .slice(-12)
+              .reverse()
+              .map((run) => (
+                <details key={run.id} className="ops-disclosure">
+                  <summary>
+                    {run.hook.id} · {run.event.replaceAll('_', ' ')} · {run.status}
+                    {run.result?.decision === 'fail'
+                      ? ' · denied'
+                      : run.result?.decision === 'escalate'
+                        ? ' · escalated'
+                        : ''}
+                  </summary>
+                  <p>
+                    <Time value={run.createdAt} /> · timeout {run.hook.timeoutSeconds}s ·{' '}
+                    {run.hook.failurePolicy === 'fail'
+                      ? 'Fail active checks on error'
+                      : 'Continue on callback error'}
+                  </p>
+                  <p>
+                    {run.error ??
+                      run.result?.message ??
+                      (run.applied ? 'Receipt applied' : 'Awaiting execution or reconciliation')}
+                  </p>
+                  {run.context.native && (
+                    <p>
+                      Codex · {run.context.native.event} ·{' '}
+                      {run.context.native.toolName ?? 'turn/session'} ·{' '}
+                      {run.context.native.model ?? 'model not reported'}
+                    </p>
+                  )}
+                  {run.result?.progress && (
+                    <p>
+                      {run.result.progress.completed}/{run.result.progress.total} reported units
+                    </p>
+                  )}
+                </details>
+              ))}
+          </div>
+        </Panel>
+      )}
       <div className="ops-detail-grid">
         <Panel title="Execution & evidence" action={<Badge value={a?.status ?? 'queued'} />}>
           <div className="ops-panel-body">
@@ -574,9 +670,6 @@ function TaskDetail({
                 {inspected.failure}
               </Alert>
             )}
-            <pre className="ops-output" aria-label="Readable attempt messages">
-              {inspected ? readableAttemptLog(inspected.output, 6) : 'Worker has not started.'}
-            </pre>
             <details className="ops-disclosure">
               <summary>Raw provider output (technical JSON)</summary>
               <pre className="ops-output" aria-label="Attempt output">
@@ -598,7 +691,7 @@ function TaskDetail({
                     {e.role} · <Time value={e.at} />
                   </small>
                   <strong>{e.type.replaceAll('.', ' · ')}</strong>
-                  <p>{shortText(e.message, 220)}</p>
+                  <p>{readableMessage(e.message, 220)}</p>
                 </div>
               </div>
             ))}
@@ -609,7 +702,7 @@ function TaskDetail({
                   <p key={e.id}>
                     <Time value={e.at} /> · {e.role} · {e.type}
                     <br />
-                    {shortText(e.message, 300)}
+                    {readableMessage(e.message, 300)}
                   </p>
                 ))}
               </details>
@@ -618,6 +711,88 @@ function TaskDetail({
         </Panel>
       </div>
     </>
+  );
+}
+function TaskActivity({ task }: { task: ManagedTask }) {
+  const [query, setQuery] = useState('');
+  const [attemptId, setAttemptId] = useState('all');
+  const [paused, setPaused] = useState<ActivityEntry[] | null>(null);
+  const entries = paused ?? taskLogEntries(task);
+  const visible = entries.filter(
+    (entry) =>
+      (attemptId === 'all' || entry.attemptId === attemptId) &&
+      `${entry.phase} ${entry.kind} ${entry.message}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  return (
+    <Panel
+      title="Task activity"
+      eyebrow="NEWEST FIRST · ALL ATTEMPTS"
+      action={
+        <Button
+          size="small"
+          aria-label={paused ? 'Resume task activity' : 'Pause task activity'}
+          startIcon={paused ? <Play size={14} /> : <Pause size={14} />}
+          onClick={() => setPaused(paused ? null : taskLogEntries(task))}
+        >
+          {paused ? 'Resume' : 'Pause display'}
+        </Button>
+      }
+    >
+      <div className="ops-panel-body">
+        <p className="muted">
+          {paused
+            ? 'Display paused; task execution and supervision continue.'
+            : 'Updates every 2 seconds. New activity appears at the top.'}
+        </p>
+        <div className="ops-activity-filters">
+          <TextField
+            label="Filter activity"
+            size="small"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <TextField
+            select
+            label="Activity attempt"
+            size="small"
+            value={attemptId}
+            onChange={(event) => setAttemptId(event.target.value)}
+          >
+            <MenuItem value="all">All attempts</MenuItem>
+            {[...task.attempts].reverse().map((attempt, i) => (
+              <MenuItem value={attempt.id} key={attempt.id}>
+                {task.attempts.length - i} · {attempt.phase} · {attempt.status}
+              </MenuItem>
+            ))}
+          </TextField>
+        </div>
+        <div
+          className="ops-activity"
+          role="region"
+          aria-label="Readable task activity"
+          aria-live={paused ? 'off' : 'polite'}
+          aria-relevant="additions text"
+        >
+          {visible.length ? (
+            visible.map((entry) => (
+              <article className={`ops-activity-entry ${entry.kind}`} key={entry.id}>
+                <div className="ops-activity-meta">
+                  <span>{entry.phase}</span>
+                  <span>{entry.kind}</span>
+                </div>
+                <pre>{entry.message}</pre>
+              </article>
+            ))
+          ) : (
+            <p>
+              {query || attemptId !== 'all'
+                ? 'No activity matches this filter.'
+                : 'Worker has not started.'}
+            </p>
+          )}
+        </div>
+      </div>
+    </Panel>
   );
 }
 function TaskForm({
@@ -637,6 +812,7 @@ function TaskForm({
   const [argv, setArgv] = useState(JSON.stringify(config.argv, null, 2));
   const [resume, setResume] = useState(JSON.stringify(config.resumeArgv, null, 2));
   const [validation, setValidation] = useState(JSON.stringify(config.validationArgv, null, 2));
+  const [hooks, setHooks] = useState(JSON.stringify(config.hooks ?? [], null, 2));
   const [artifacts, setArtifacts] = useState(config.requiredArtifacts.join('\n'));
   const [error, setError] = useState('');
   const field = (key: keyof TaskConfig, label: string, type = 'text', help?: string) => (
@@ -762,16 +938,18 @@ function TaskForm({
           </AccordionSummary>
           <AccordionDetails>
             <div className="ops-form-grid">
-              <FormControlLabel
-                className="ops-full"
-                control={
-                  <Switch
-                    checked={c.goalMonitoring}
-                    onChange={(_, v) => setC({ ...c, goalMonitoring: v })}
-                  />
-                }
-                label="Default goal-progress monitoring for new Codex tasks"
-              />
+              {c.worker === 'codex' && (
+                <FormControlLabel
+                  className="ops-full"
+                  control={
+                    <Switch
+                      checked={c.goalMonitoring}
+                      onChange={(_, v) => setC({ ...c, goalMonitoring: v })}
+                    />
+                  }
+                  label="Default goal-progress monitoring for new Codex tasks"
+                />
+              )}
               {field(
                 'progressFile',
                 'Progress JSON path',
@@ -793,16 +971,18 @@ function TaskForm({
               {field('heartbeatTimeoutSeconds', 'Runner heartbeat timeout (seconds)', 'number')}
               {field('timeoutSeconds', 'Worker attempt timeout (seconds)', 'number')}
               {field('taskTimeoutSeconds', 'Total task lifetime (seconds)', 'number')}
-              <FormControlLabel
-                className="ops-full"
-                control={
-                  <Switch
-                    checked={c.networkAccess}
-                    onChange={(_, v) => setC({ ...c, networkAccess: v })}
-                  />
-                }
-                label="Authorize network access for Codex worker and bounded repair"
-              />
+              {(c.worker === 'codex' || (c.recovery === 'supervised' && c.allowRepair)) && (
+                <FormControlLabel
+                  className="ops-full"
+                  control={
+                    <Switch
+                      checked={c.networkAccess}
+                      onChange={(_, v) => setC({ ...c, networkAccess: v })}
+                    />
+                  }
+                  label="Authorize network access for Codex worker and bounded repair"
+                />
+              )}
             </div>
           </AccordionDetails>
         </Accordion>
@@ -819,15 +999,17 @@ function TaskForm({
               ])}
               {field('maxRetries', 'Maximum worker retries', 'number')}
               {field('backoffSeconds', 'Retry delay (seconds)', 'number')}
-              <TextField
-                className="ops-full"
-                multiline
-                minRows={2}
-                label="Checkpoint resume argv (JSON array)"
-                value={resume}
-                onChange={(e) => setResume(e.target.value)}
-                helperText="Optional. Empty uses the original command; it must be safe to repeat."
-              />
+              {c.worker === 'command' && (
+                <TextField
+                  className="ops-full"
+                  multiline
+                  minRows={2}
+                  label="Checkpoint resume argv (JSON array)"
+                  value={resume}
+                  onChange={(e) => setResume(e.target.value)}
+                  helperText="Optional. Empty uses the original command; it must be safe to repeat."
+                />
+              )}
               {c.recovery === 'supervised' && (
                 <>
                   {field(
@@ -856,6 +1038,22 @@ function TaskForm({
             </div>
           </AccordionDetails>
         </Accordion>
+        <Accordion>
+          <AccordionSummary expandIcon={<ChevronDown size={17} />}>
+            Lifecycle hooks
+          </AccordionSummary>
+          <AccordionDetails>
+            <TextField
+              fullWidth
+              multiline
+              minRows={5}
+              label="Lifecycle hooks (JSON array)"
+              value={hooks}
+              onChange={(e) => setHooks(e.target.value)}
+              helperText="Optional callbacks with id, events and argv. Before-run hooks gate execution; on_tick can report progress. Native Codex hooks require its trust review."
+            />
+          </AccordionDetails>
+        </Accordion>
         <Alert severity="info" sx={{ mt: 2 }}>
           Commands execute as your local user. Diagnosis uses a read-only Codex sandbox. Enabled
           repair uses workspace-write. Active attempts keep their saved configuration; edits affect
@@ -872,10 +1070,12 @@ function TaskForm({
               const parsed = JSON.parse(argv);
               const parsedResume = JSON.parse(resume);
               const parsedValidation = JSON.parse(validation);
+              const parsedHooks = JSON.parse(hooks);
               if (
                 !Array.isArray(parsed) ||
                 !Array.isArray(parsedResume) ||
-                !Array.isArray(parsedValidation)
+                !Array.isArray(parsedValidation) ||
+                !Array.isArray(parsedHooks)
               )
                 throw new Error('Arguments must be JSON arrays');
               setError('');
@@ -884,6 +1084,7 @@ function TaskForm({
                 argv: parsed,
                 resumeArgv: parsedResume,
                 validationArgv: parsedValidation,
+                hooks: parsedHooks,
                 requiredArtifacts: artifacts
                   .split('\n')
                   .map((p) => p.trim())
@@ -931,16 +1132,21 @@ function ServiceAlerts({
             <dd>Current user · starts at login · local machine</dd>
           </dl>
           <div className="ops-buttons">
+            {view.service.supported && (
+              <Button
+                variant="contained"
+                disabled={busy}
+                onClick={() =>
+                  void action('/service/' + (view.service.loaded ? 'uninstall' : 'install'))
+                }
+              >
+                {view.service.loaded ? 'Remove OS service' : 'Install OS service'}
+              </Button>
+            )}
             <Button
-              variant="contained"
-              disabled={busy || !view.service.supported}
-              onClick={() =>
-                void action('/service/' + (view.service.loaded ? 'uninstall' : 'install'))
-              }
+              disabled={busy || view.daemonHealthy}
+              onClick={() => void action('/service/start')}
             >
-              {view.service.loaded ? 'Remove OS service' : 'Install OS service'}
-            </Button>
-            <Button disabled={busy} onClick={() => void action('/service/start')}>
               Start watchdog
             </Button>
           </div>
@@ -1015,7 +1221,9 @@ function ServiceAlerts({
               Save Telegram configuration
             </Button>
             <Button
-              disabled={busy || !view.telegram.enabled}
+              disabled={
+                busy || !view.telegram.enabled || !view.telegram.hasToken || !view.telegram.chatId
+              }
               onClick={() => void action('/telegram/test')}
             >
               Send test notification

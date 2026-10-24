@@ -1,0 +1,51 @@
+{
+  "version": "0.3.0b1",
+  "status": "beta release qualification",
+  "platform": "Darwin",
+  "checks": {
+    "runtimeAndCli": {
+      "passed": 64,
+      "scope": "accelerated local checks"
+    },
+    "desktopMobileBrowser": {
+      "passed": 14,
+      "scope": "accelerated local checks"
+    },
+    "installedWheel": {
+      "passed": 8,
+      "scope": "accelerated local checks"
+    },
+    "pythonSdk": {
+      "passed": 5,
+      "scope": "accelerated local checks"
+    },
+    "optionalAtBotInstalledWheel": {
+      "passed": 2,
+      "scope": "accelerated local checks"
+    }
+  },
+  "typecheck": "passed as part of production runtime build",
+  "productionBuild": "passed",
+  "formatCheck": "passed",
+  "skillValidation": "passed",
+  "wheel": {
+    "filename": "atsys-0.3.0b1-py3-none-any.whl",
+    "sha256": "ddf0f031c3876807068f41f0d50d2923fdab0aec231275d2304e7d545a7de3e9"
+  },
+  "nativeCodex": "../native-hooks-verification.json",
+  "uiChanges": [
+    "Only operational task and service/Telegram routes exposed",
+    "No sample state API prerequisite",
+    "Readable activity across all attempts, newest first",
+    "Working attempt/text filters and pause display independent of execution",
+    "Mobile theme and real settings persistence verified",
+    "Stale connections and notify-only supervision labeled accurately"
+  ],
+  "limits": [
+    "Not a multi-hour soak test",
+    "No external Telegram destination or external AtBot model endpoint invoked",
+    "Native Codex events cover tool/turn boundaries, not all internal model HTTP requests",
+    "Untrusted native definitions may be skipped; hooks are not a complete security boundary"
+  ],
+  "versionNote": "Python/UI version 0.3.0b1 corresponds to npm SemVer 0.3.0-beta.1. Native live-run evidence was collected before the beta version rename."
+}

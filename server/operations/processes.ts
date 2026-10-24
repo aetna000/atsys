@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import type { Attempt } from '../../shared/operations.js';
+import type { Attempt, HookRun } from '../../shared/operations.js';
 export function processAlive(pid: number) {
   try {
     process.kill(pid, 0);
@@ -8,7 +8,10 @@ export function processAlive(pid: number) {
     return false;
   }
 }
-export function runnerIdentity(a: Attempt): 'owned' | 'gone' | 'foreign' {
+function identity(
+  a: { pid: number | null; id: string },
+  pattern: RegExp,
+): 'owned' | 'gone' | 'foreign' {
   if (!a.pid || !processAlive(a.pid)) return 'gone';
   try {
     const snapshot = execFileSync('ps', ['-p', String(a.pid), '-o', 'stat=', '-o', 'command='], {
@@ -21,16 +24,21 @@ export function runnerIdentity(a: Attempt): 'owned' | 'gone' | 'foreign' {
     // Its PID cannot be reused yet, so cleanup of its original group remains safe.
     if (state.startsWith('Z')) return 'gone';
     const command = commandParts.join(' ');
-    return /attempt-runner\.(ts|mjs)(?:\s|$)/.test(command) && command.includes(a.id)
-      ? 'owned'
-      : 'foreign';
+    return pattern.test(command) && command.includes(a.id) ? 'owned' : 'foreign';
   } catch {
     return processAlive(a.pid) ? 'foreign' : 'gone';
   }
 }
+export const runnerIdentity = (a: Attempt) => identity(a, /attempt-runner\.(ts|mjs)(?:\s|$)/);
+export const hookRunnerIdentity = (a: HookRun) => identity(a, /hook-runner\.(ts|mjs)(?:\s|$)/);
 export function killAttempt(a: Attempt): boolean {
+  return killGroup(a, runnerIdentity(a));
+}
+export function killHookRun(a: HookRun): boolean {
+  return killGroup(a, hookRunnerIdentity(a));
+}
+function killGroup(a: { pid: number | null }, identity: 'owned' | 'gone' | 'foreign'): boolean {
   if (!a.pid) return true;
-  const identity = runnerIdentity(a);
   if (identity === 'foreign') return false;
   // The detached runner is the group leader. If its PID is absent, lingering children
   // still belong to that group; an existing foreign leader is never signaled.

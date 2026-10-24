@@ -8,13 +8,15 @@ The goal-oriented setup/recovery increment is described in [goal supervision](GO
 and `specs/004-goal-oriented-supervision`. It ships with readable task monitoring in
 [0.2.1](releases/v0.2.1.md).
 
+The 0.3.0b1 beta release implements [lifecycle hooks and native Codex tool/turn callbacks](HOOKS.md), plus an optional AtBot/Pydantic AI observer. Per-request Codex model interception and live operator steering remain outside current coverage.
+
 1. **Reuse a mature orchestration backend for production scope.** Prototype Windmill and Temporal against the same crash/stall/recovery acceptance cases before adding distributed scheduling. See [build versus reuse](BUILD-VS-REUSE.md).
 2. **Broader coding-provider support.** Add supported Claude/Copilot/etc. adapters; native resumable sessions, interactive hooks, live steering and normalized usage. Current native execution supports Codex exec plus arbitrary trusted commands.
 3. **Stronger execution isolation and recovery.** Per-task worktrees/containers, reviewed diffs/rollback, application-specific side-effect reconciliation and recovery plugins. The current generic command runner is local-user execution, not a sandbox.
 4. **Long-duration qualification.** Multi-hour soak tests, machine reboot/sleep/wake tests, disk-full/corruption handling, high-concurrency/resource limits, retention/export and log streaming beyond bounded snapshots. Current failure tests are accelerated and local.
 5. **Workflow plans.** Persisted dependency graphs, multiple specialized workers, dynamic task decomposition, approval gates for individual external actions, and reusable coding-task templates. Today one objective can run through Codex or an arbitrary script, with separate supervision and acceptance checks.
 6. **Models and money.** Native usage capture, token budgets, enforced monetary budgets and dated pricing provenance. Current time/attempt/call limits are enforced; costs remain unknown.
-7. **Companions.** AtMem governed retrieval, AtFlows telemetry and AtBot assistance remain separate opt-in integrations. Their sample UI does not imply a live connector.
+7. **Companions.** AtMem governed retrieval and AtFlows telemetry remain future integrations. AtBot/Pydantic AI observation is available as an optional hook adapter; broader AtBot assistance remains separate. Their sample UI does not imply a live connector.
 8. **Distribution and access.** Linux service installation, authenticated remote access and teams. Version 0.2.1 packages the runtime, dashboard and Codex onboarding skill; see [packaging](PACKAGING.md). Current built-in OS supervision is a per-user macOS LaunchAgent; HTTP is local-only.
 9. **Alert operations.** Quiet hours, routing by task/severity, external always-on dead-man monitoring and additional transports. Telegram outbound delivery, durable retries and outcomes exist now; incoming messages cannot authorize actions.
 

@@ -27,7 +27,7 @@ Output is bounded to 32 KB per attempt, line-buffered and redacted before persis
 
 ## Codex adapter
 
-`codex exec --json --output-last-message` runs noninteractively using the installed CLI and its existing authentication. Explicit sandbox selection separates read-only diagnosis from workspace-write coding/repair. `--output-schema` constrains supervisor/repair responses, and Zod verifies the final response again. No bypass-sandbox flags are used. Models and reasoning effort are task settings. Native session resume, interactive tool approval hooks, exact provider cost accounting and arbitrary provider adapters remain unimplemented.
+`codex exec --json --output-last-message` runs noninteractively using the installed CLI and its existing authentication. Explicit sandbox selection separates read-only diagnosis from workspace-write coding/repair. `--output-schema` constrains supervisor/repair responses, and Zod verifies the final response again. No bypass-sandbox flags are used. Models and reasoning effort are task settings. Native session resume, interactive operator approvals, exact provider cost accounting and arbitrary provider adapters remain unimplemented. Opt-in native Codex pre/post tool and turn hooks use a detached relay and durable callback receipts; turn hooks are not per-model-HTTP-request interception. See [hooks](HOOKS.md) for trust review and coverage limits.
 
 See [official noninteractive documentation](https://learn.chatgpt.com/docs/non-interactive-mode) and [OpenAI repair-loop example](https://developers.openai.com/cookbook/examples/codex/build_iterative_repair_loops_with_codex).
 
@@ -45,4 +45,8 @@ This small embedded backend is not a replacement for a production distributed wo
 
 ## Existing sample console
 
-The first milestone's projects/fleet/runs/approvals/costs screens and separate `control-plane.sqlite` remain as explicitly labeled reference workflows. Their sample budgets and role records do not control the operational task service. `server/process-adapter.ts` remains available only for the legacy attached CLI mode. Headlamp attribution and source notices remain intact.
+The 0.3.0b1 product UI exposes only operational tasks and service/Telegram settings; historical sample URLs redirect to managed tasks. The first milestone's reference source, APIs and separate `control-plane.sqlite` remain for compatibility, without navigation or a prerequisite sample-state request. Their sample budgets and role records do not control the operational task service. `server/process-adapter.ts` remains available only for the legacy attached CLI mode. Headlamp attribution and source notices remain intact.
+
+## Lifecycle hook dispatch
+
+Task configuration owns bounded callback definitions. Detached hook runners claim durable invocation IDs and immutable context/config snapshots, execute explicit argv with JSON stdin/stdout and persist outcomes. The watchdog dispatches at most four callbacks globally and one per task, adopts live runners, interrupts uncertain deliveries without automatic replay, and applies each receipt once. Before-run/validation callbacks gate process launch; active progress can advance only from allowed events. Outcomes still require independent validation. Native Codex callbacks relay through the same queue without depending on HTTP/UI. The optional AtBot bridge uses its existing Pydantic AI provider and capabilities as a constrained observer. Watchdog hook-protocol capability checks prevent old daemons silently accepting new hook configuration.

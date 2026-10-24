@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { OperationsState, ManagedTask, TaskEvent } from '../../shared/operations.js';
 import { taskDefaults } from '../../shared/operations.js';
 import { redact } from '../control-plane.js';
+import { queueLifecycleHooks } from './hooks.js';
 export const stamp = () => new Date().toISOString();
 export const uid = (prefix: string) => `${prefix}-${randomUUID()}`;
 export function taskEvent(
@@ -14,8 +15,10 @@ export function taskEvent(
   message: string,
 ) {
   task.updatedAt = stamp();
-  task.events.unshift({ id: uid('evt'), at: task.updatedAt, role, type, message: redact(message) });
+  const id = uid('evt');
+  task.events.unshift({ id, at: task.updatedAt, role, type, message: redact(message) });
   task.events = task.events.slice(0, 500);
+  queueLifecycleHooks(task, type, id);
 }
 export function enqueue(
   s: OperationsState,

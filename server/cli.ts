@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { applicationRoot } from './runtime.js';
+import { codexHookConfig } from './operations/codex-hooks.js';
 import { execFileSync } from 'node:child_process';
 import { Store } from './store.js';
 import { ControlPlane } from './control-plane.js';
@@ -13,11 +14,12 @@ import { withDefaults } from './operations/config.js';
 import { selectTask, watchTask } from './operations/monitor.js';
 import {
   formatTaskStatus,
-  readableAttemptLog,
+  readableTaskLog,
   taskPresentation,
 } from '../shared/task-presentation.js';
 import {
   ensureDaemon,
+  ensureHookSupport,
   installService,
   uninstallService,
   serviceStatus,
@@ -66,6 +68,16 @@ Use task submit for unattended work. Only run --attached uses the legacy termina
 Codex supervision uses codex exec with read-only diagnosis and optional bounded repair.
 Data directory: ${dataDir}
 Start console from the AtSys repository: npm run dev (development) or npm run build && npm start.`);
+  } else if (command === 'hooks' && args[1] === 'codex-config') {
+    const file = value('--config');
+    if (!file) throw new Error('Use hooks codex-config --config task.json');
+    console.log(
+      JSON.stringify(
+        codexHookConfig(withDefaults(JSON.parse(readFileSync(resolve(file), 'utf8')))),
+        null,
+        2,
+      ),
+    );
   } else if (
     command === 'task' ||
     command === 'service' ||
@@ -119,7 +131,7 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
               attempt
                 ? optionArgs.includes('--raw')
                   ? attempt.output
-                  : readableAttemptLog(attempt.output, Number(value('--lines') ?? 12))
+                  : readableTaskLog(task, Number(value('--lines') ?? 12))
                 : 'Worker has not started.',
             );
           }
@@ -128,6 +140,10 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
             JSON.stringify(ops.read().tasks.find((t) => t.id === args[2]) ?? null, null, 2),
           );
         else if (action === 'stop' || action === 'retry') {
+          if (action === 'retry') {
+            const task = ops.read().tasks.find((t) => t.id === args[2]);
+            if (task) await ensureHookSupport(ops, task.config);
+          }
           console.log(JSON.stringify(changeTask(ops, args[2], action), null, 2));
           ensureDaemon(ops);
         } else if (action === 'submit') {
@@ -151,6 +167,7 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
                   'notify' | 'restart' | 'supervised',
                 timeoutSeconds: Number(value('--timeout') ?? 21600),
               });
+          await ensureHookSupport(ops, config);
           const task = createTask(ops, config);
           ensureDaemon(ops);
           console.log(

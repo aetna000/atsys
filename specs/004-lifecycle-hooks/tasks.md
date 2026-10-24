@@ -1,0 +1,11 @@
+- [x] Define hook configuration, context, results, receipts and migration defaults
+- [x] Implement durable scheduling, bounded runners, gate ordering and reconciliation
+- [x] Integrate progress observations and policy-controlled failure handling
+- [x] Add Python sync/async SDK and optional AtBot/Pydantic AI bridge
+- [x] Expose configuration and receipts in the dashboard and installed package
+- [x] Add lifecycle, timeout, crash, progress, authority and UI acceptance coverage
+- [x] Document examples, protocol, limitations and verification
+
+- [x] Add native Codex tool/turn relay, trust-preserving project installer and handshake checks
+- [x] Reject hook submissions/configuration on legacy healthy watchdogs
+- [x] Verify real Codex pre-tool denial, model metadata and independent acceptance from an installed wheel

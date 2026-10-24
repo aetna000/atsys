@@ -2,6 +2,8 @@
 
 Date: 2026-10-24 (Australia/Sydney). This report supersedes the first simulator-only milestone report. The original brief is preserved; the user's clarified intent is the active [operational specification](../specs/002-durable-task-supervision/spec.md).
 
+The 0.3.0b1 candidate adds [lifecycle/native Codex hooks](HOOKS.md) and [operational UI/activity cleanup](../specs/005-operational-ui/spec.md). The product UI now excludes historical sample/unavailable screens; optional AtBot observation is implemented through Pydantic AI. See [candidate verification](releases/v0.3.0b1-verification.json) for current test coverage. Historical milestone details below retain their original scope.
+
 ## Delivered operational behavior
 
 - Primary managed-task UI for arbitrary coding objectives, project roots, plans/constraints, command or Codex workers, model/effort settings and independent acceptance checks.

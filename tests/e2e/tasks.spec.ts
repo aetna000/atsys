@@ -219,3 +219,83 @@ test('activity is readable, newest first and pausing the display never pauses ex
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('named milestones explain their source and row/detail controls pause, resume and stop owned work', async ({
+  page,
+  request,
+}) => {
+  const { readFileSync } = await import('node:fs');
+  const { taskDefaults } = await import('../../shared/operations');
+  const cwd = mkdtempSync(join(tmpdir(), 'atsys-controls-'));
+  const names = Array.from({ length: 8 }, (_, i) => `Named fixture stage ${i + 1}`);
+  const name = `Milestone and control acceptance ${Date.now()}`;
+  let id: string | undefined;
+  try {
+    const result = await request.post('/api/tasks', {
+      data: {
+        ...taskDefaults,
+        name,
+        objective: 'Exercise eight named stages and local process controls',
+        cwd,
+        worker: 'command',
+        recovery: 'notify',
+        goalMonitoring: false,
+        progressFile: 'progress.json',
+        validator: 'command',
+        validationArgv: [process.execPath, '-e', 'process.exit(0)'],
+        argv: [
+          process.execPath,
+          '-e',
+          `const fs=require('fs');let n=0;setInterval(()=>{fs.writeFileSync('ticks',String(++n));fs.writeFileSync('progress.json',JSON.stringify({completed:Math.min(n,7),total:8,milestones:${JSON.stringify(names)},planSource:'Project-owned ordered stages from the acceptance fixture',checkpoint:'stage-'+Math.min(n,7)}))},200)`,
+        ],
+        timeoutSeconds: 60,
+      },
+    });
+    expect(result.ok()).toBe(true);
+    const task = await result.json();
+    id = task.id;
+    await page.goto(`/tasks/${id}`);
+    const plan = page.getByRole('region', { name: 'Reported milestone plan' });
+    // A named section exposes its eight actual labels, not only a denominator.
+    await expect(
+      page.getByText('Project-owned ordered stages from the acceptance fixture', { exact: true }),
+    ).toBeVisible();
+    for (const name of names) await expect(plan.getByText(name, { exact: false })).toBeVisible();
+    await expect(
+      page.getByText(/Milestones are reported progress, not acceptance evidence/),
+    ).toBeVisible();
+    await expect(plan.locator('li')).toHaveCount(8);
+    await page.getByRole('button', { name: 'Pause task', exact: true }).click();
+    await expect(page.getByText('Local processes paused', { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+    const frozen = readFileSync(join(cwd, 'ticks'), 'utf8');
+    await page.waitForTimeout(700);
+    expect(readFileSync(join(cwd, 'ticks'), 'utf8')).toBe(frozen);
+    await page.screenshot({
+      path: `docs/screenshots/tasks-paused-${test.info().project.name}.png`,
+      fullPage: true,
+    });
+    await page.getByRole('button', { name: 'All managed tasks', exact: false }).click();
+    const controls = page.getByRole('group', {
+      name: `Controls for ${name}`,
+    });
+    await controls.getByRole('button', { name: 'Resume task', exact: true }).click();
+    await expect.poll(() => readFileSync(join(cwd, 'ticks'), 'utf8')).not.toBe(frozen);
+    await controls.getByRole('button', { name: 'Stop task', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Stop this task?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Keep task', exact: true }).click();
+    await controls.getByRole('button', { name: 'Stop task', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm stop', exact: true }).click();
+    const row = page
+      .locator('.ops-task-container')
+      .filter({ has: page.getByText(name, { exact: true }) });
+    await expect(row).toContainText('Stopped', { timeout: 10000 });
+    const stopped = readFileSync(join(cwd, 'ticks'), 'utf8');
+    await page.waitForTimeout(400);
+    expect(readFileSync(join(cwd, 'ticks'), 'utf8')).toBe(stopped);
+  } finally {
+    if (id) await request.post(`/api/tasks/${id}/stop`, { data: {} });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

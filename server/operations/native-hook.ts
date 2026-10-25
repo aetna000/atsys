@@ -91,7 +91,12 @@ try {
       toolResult: payload.tool_response,
     });
     return ids[0]
-      ? { id: ids[0], timeout: hook.timeoutSeconds + 8, failurePolicy: hook.failurePolicy }
+      ? {
+          id: ids[0],
+          timeout: hook.timeoutSeconds + 8,
+          failurePolicy: hook.failurePolicy,
+          pausedMs: attempt.pausedMs ?? 0,
+        }
       : null;
   });
   if (!queued) {
@@ -101,9 +106,16 @@ try {
   }
   const deadline = Date.now() + queued.timeout * 1000;
   let response: object | undefined;
-  while (Date.now() < deadline) {
+  while (true) {
     const task = store.read().tasks.find((t) => t.id === taskId);
     const receipt = task?.hookRuns?.find((r) => r.id === queued.id);
+    const activeAttempt = task?.attempts.find((a) => a.id === attemptId);
+    const pendingPause =
+      task?.pauseState && !task.pauseState.resumeRequestedAt
+        ? Date.now() - Date.parse(task.pauseState.requestedAt)
+        : 0;
+    if (Date.now() >= deadline + (activeAttempt?.pausedMs ?? 0) - queued.pausedMs + pendingPause)
+      break;
     if (
       !task ||
       task.stopRequested ||

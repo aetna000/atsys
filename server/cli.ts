@@ -15,6 +15,8 @@ import { selectTask, watchTask } from './operations/monitor.js';
 import {
   formatTaskStatus,
   readableTaskLog,
+  readableMessage,
+  taskLogEntries,
   taskPresentation,
 } from '../shared/task-presentation.js';
 import {
@@ -99,17 +101,36 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
           );
       } else {
         const action = command === 'run' ? 'submit' : (args[1] ?? 'list');
-        if (action === 'list')
-          console.table(
-            ops.read().tasks.map((t) => ({
-              id: t.id,
-              name: t.config.name,
-              status: t.status,
-              attempts: t.attempts.length,
-              updated: t.updatedAt,
-            })),
-          );
-        else if (['status', 'watch', 'logs'].includes(action)) {
+        if (action === 'list') {
+          const tasks = ops
+            .read()
+            .tasks.filter(
+              (task) =>
+                !optionArgs.includes('--active') ||
+                [
+                  'queued',
+                  'running',
+                  'recovering',
+                  'supervising',
+                  'repairing',
+                  'pausing',
+                  'paused',
+                  'resuming',
+                ].includes(task.status),
+            );
+          if (optionArgs.includes('--json'))
+            console.log(JSON.stringify(tasks.map(taskPresentation)));
+          else
+            console.table(
+              tasks.map((t) => ({
+                id: t.id,
+                name: t.config.name,
+                status: t.status,
+                attempts: t.attempts.length,
+                updated: t.updatedAt,
+              })),
+            );
+        } else if (['status', 'watch', 'logs'].includes(action)) {
           const id = args[2]?.startsWith('--') ? undefined : args[2];
           const task = selectTask(ops.read().tasks, id);
           const dashboard = 'http://127.0.0.1:' + (process.env.ATSYS_PORT ?? 4310);
@@ -122,7 +143,35 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
           else if (action === 'status')
             console.log(
               optionArgs.includes('--json')
-                ? JSON.stringify(taskPresentation(task), null, 2)
+                ? JSON.stringify(
+                    {
+                      ...taskPresentation(task),
+                      ...(optionArgs.includes('--activity')
+                        ? {
+                            activity: taskLogEntries(task, 100),
+                            timeline: task.events.slice(0, 100).map((event) => ({
+                              ...event,
+                              message: readableMessage(event.message, 600),
+                            })),
+                            hooks: (task.hookRuns ?? [])
+                              .slice(-30)
+                              .reverse()
+                              .map((run) => ({
+                                id: run.id,
+                                name: run.hook.id,
+                                event: run.event,
+                                status: run.status,
+                                message: run.error ?? run.result?.message ?? '',
+                                decision: run.result?.decision,
+                                model: run.context.native?.model,
+                                tool: run.context.native?.toolName,
+                              })),
+                          }
+                        : {}),
+                    },
+                    null,
+                    2,
+                  )
                 : formatTaskStatus(task, process.stdout.columns || 88, Date.now(), dashboard),
             );
           else {
@@ -139,12 +188,22 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
           console.log(
             JSON.stringify(ops.read().tasks.find((t) => t.id === args[2]) ?? null, null, 2),
           );
-        else if (action === 'stop' || action === 'retry') {
+        else if (['stop', 'retry', 'pause', 'resume'].includes(action)) {
           if (action === 'retry') {
             const task = ops.read().tasks.find((t) => t.id === args[2]);
             if (task) await ensureHookSupport(ops, task.config);
           }
-          console.log(JSON.stringify(changeTask(ops, args[2], action), null, 2));
+          console.log(
+            JSON.stringify(
+              changeTask(
+                ops,
+                selectTask(ops.read().tasks, args[2]).id,
+                action as 'stop' | 'retry' | 'pause' | 'resume',
+              ),
+              null,
+              2,
+            ),
+          );
           ensureDaemon(ops);
         } else if (action === 'submit') {
           const file = value('--config');

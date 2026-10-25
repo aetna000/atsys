@@ -49,3 +49,24 @@ function killGroup(a: { pid: number | null }, identity: 'owned' | 'gone' | 'fore
   }
   return true;
 }
+
+export function signalAttempt(a: Attempt, signal: 'SIGSTOP' | 'SIGCONT') {
+  return signalGroup(a, runnerIdentity(a), signal);
+}
+export function signalHookRun(a: HookRun, signal: 'SIGSTOP' | 'SIGCONT') {
+  return signalGroup(a, hookRunnerIdentity(a), signal);
+}
+function signalGroup(
+  a: { pid: number | null },
+  identity: 'owned' | 'gone' | 'foreign',
+  signal: 'SIGSTOP' | 'SIGCONT',
+) {
+  if (!a.pid) return true;
+  if (identity === 'foreign') return false;
+  try {
+    process.kill(-a.pid, signal);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH';
+  }
+}

@@ -32,7 +32,7 @@ def data_directory() -> Path:
 
 def node_executable() -> str:
     from nodejs_wheel import node
-    result = node(["-p", "process.execPath"], return_completed_process=True, capture_output=True, text=True, check=True)
+    result = node(["-p", "process.execPath"], return_completed_process=True, capture_output=True, stdin=subprocess.DEVNULL, text=True, check=True)
     return result.stdout.strip()
 
 
@@ -57,7 +57,7 @@ def backend(args: list[str], *, capture: bool = False) -> subprocess.CompletedPr
     if not (RUNTIME / "cli.mjs").is_file():
         raise RuntimeError("This install is missing its bundled runtime. Install a built AtSys wheel.")
     executable = node_executable()
-    return subprocess.run([executable, str(RUNTIME / "cli.mjs"), *args], env=environment(executable), text=True, capture_output=capture, check=False)
+    return subprocess.run([executable, str(RUNTIME / "cli.mjs"), *args], env=environment(executable), text=True, capture_output=capture, stdin=subprocess.DEVNULL if capture else None, check=False)
 
 
 def _private_json(path: Path, value: object, *, replace: bool = True) -> None:
@@ -258,10 +258,13 @@ def main(argv: list[str] | None = None) -> int:
                                        Preserve existing hooks; install native bridge for review
   atsys hooks atbot --config atbot.json  Optional Pydantic AI observer callback
   atsys task submit --config task.json  Hand off a task and return immediately
-  atsys task list | show ID | stop ID | retry ID
+  atsys monitor                        Interactive task picker and live monitoring
+  atsys tasks                          Active and paused tasks
+  atsys task list [--active] | show ID
+  atsys task pause ID | resume ID | stop ID | retry ID
   atsys task status [ID] [--json]       Readable progress, blocker and next action
   atsys task watch [ID] [--once]        Quiet live monitor; leaving does not stop work
-  atsys task logs [ID] [--raw]          Readable messages; raw transcripts opt-in
+  atsys task logs [ID] [--raw]          Formatted activity; --follow for live view, --raw for transcripts
   atsys service install | status | start | uninstall
   atsys run --worker codex --objective ... --validation '["npm","test"]'
   atsys doctor
@@ -300,6 +303,19 @@ Persistent data: {data_directory()}
         if args[:2] == ["task", "schema"]:
             print((RESOURCES / "task-schema.json").read_text(), end="")
             return 0
+        if args[0] == 'monitor':
+            args = ['task','monitor',*args[1:]]
+        if args[:2] == ['watch','task']:
+            args = ['task','watch',*args[2:]]
+        elif args[0] in ('watch','logs'):
+            args = ['task',args[0],*args[1:]]
+        elif args[0] == 'tasks':
+            args = ['task','list','--active',*args[1:]]
+        elif args[0] == 'status':
+            args = ['task','status',*args[1:]]
+        if args[0] == 'task' and args[1:2] and args[1] in ('list','status','watch','logs','pause','resume','stop','retry','monitor') and not any(flag in args for flag in ('--json','--raw')):
+            from .terminal import main as terminal_main
+            return terminal_main(args, backend)
         return backend(args).returncode
     except KeyboardInterrupt:
         print("\nAtSys CLI closed. Managed execution is controlled separately; use task status to check it.", file=sys.stderr)

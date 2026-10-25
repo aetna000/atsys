@@ -1,5 +1,6 @@
 import type { ManagedTask, TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
+import { creditPause, taskElapsed } from './pause.js';
 import { validateConfig } from './config.js';
 import { OperationsStore, stamp, taskEvent, uid } from './store.js';
 export function requireHookSupport(store: OperationsStore, config: TaskConfig) {
@@ -44,7 +45,7 @@ export function createTask(store: OperationsStore, input: unknown) {
 export function changeTask(
   store: OperationsStore,
   id: string,
-  action: 'stop' | 'retry' | 'configure',
+  action: 'stop' | 'retry' | 'configure' | 'pause' | 'resume',
   input?: unknown,
   revision?: number,
 ) {
@@ -68,8 +69,59 @@ export function changeTask(
         'config.updated',
         'Configuration saved. Active attempts retain their snapshot; task lifetime and next attempts use the new policy.',
       );
+    } else if (action === 'pause') {
+      if (t.pauseState) return t;
+      if (['completed', 'stopped', 'needs_attention'].includes(t.status))
+        throw new DomainError('Only an executing or queued task can be paused', 409);
+      const daemon = s.daemon;
+      if (
+        !daemon ||
+        daemon.pauseProtocol !== 1 ||
+        Date.now() - Date.parse(daemon.heartbeatAt) >= 10000
+      )
+        throw new DomainError(
+          'Pause requires a healthy upgraded watchdog. Restart the watchdog with this runtime.',
+          409,
+        );
+      if (
+        t.attempts.some(
+          (a) => ['starting', 'running'].includes(a.status) && a.pauseProtocol !== 1,
+        ) ||
+        t.hookRuns?.some((r) => r.status === 'running' && r.pauseProtocol !== 1)
+      )
+        throw new DomainError(
+          'An active runner predates local pause support. Wait for it to finish, or stop and retry using the upgraded runtime.',
+          409,
+        );
+      t.pauseState = { requestedAt: stamp(), previousStatus: t.status };
+      t.status = 'pausing';
+      taskEvent(
+        t,
+        'policy',
+        'pause.requested',
+        'Operator requested local process pause; awaiting watchdog confirmation.',
+      );
+    } else if (action === 'resume') {
+      if (!t.pauseState) return t;
+      if (s.daemon?.pauseProtocol !== 1 || Date.now() - Date.parse(s.daemon.heartbeatAt) >= 10000)
+        throw new DomainError('Resume requires a healthy upgraded watchdog.', 409);
+      if (taskElapsed(t) >= t.config.taskTimeoutSeconds * 1000)
+        throw new DomainError(
+          'Task lifetime expired. Stop it or increase the authorized lifetime before resuming.',
+          409,
+        );
+      if (t.status === 'resuming') return t;
+      creditPause(t);
+      t.status = 'resuming';
+      taskEvent(
+        t,
+        'policy',
+        'resume.requested',
+        'Operator requested resume of owned local process groups.',
+      );
     } else if (action === 'stop') {
       if (['completed', 'stopped'].includes(t.status)) return t;
+      creditPause(t);
       t.stopRequested = true;
       taskEvent(
         t,
@@ -78,6 +130,8 @@ export function changeTask(
         'Operator requested stop. Watchdog will confirm process cleanup.',
       );
     } else {
+      if (t.pauseState)
+        throw new DomainError('Resume or stop the paused task before retrying', 409);
       if (
         !['needs_attention', 'stopped'].includes(t.status) ||
         t.attempts.some((a) => ['starting', 'running'].includes(a.status))
@@ -85,7 +139,7 @@ export function changeTask(
         throw new DomainError(
           'Retry requires a stopped or needs-attention task with no active attempt.',
         );
-      if (Date.now() - Date.parse(t.createdAt) >= t.config.taskTimeoutSeconds * 1000)
+      if (taskElapsed(t) >= t.config.taskTimeoutSeconds * 1000)
         throw new DomainError(
           'Task lifetime expired. Increase the task lifetime or create a new task.',
         );

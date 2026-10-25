@@ -40,3 +40,16 @@ Use `atsys init --no-service --no-dashboard` for integration-only setup, `atsys 
 The 0.3.0b1 beta release adds project lifecycle callbacks (`atsys hooks run file.py:hooks`), native Codex tool/turn hooks and optional `atsys[atbot]` observers. Configure these in task `hooks`; run `atsys hooks events` for supported events. Native Codex hooks need normal `/hooks` trust review after `atsys hooks codex-install --config task.json`. Internal Codex model HTTP requests are not exposed.
 
 The 0.3.0b1 beta UI exposes operational tasks and service/Telegram settings. Activity decodes structured logs, shows newest entries first across all attempts, and supports attempt/text filters and pause display. `atsys task logs ID` shows the same readable activity; the live monitor places the latest message near the top. Raw retained output remains available explicitly.
+
+The unreleased 0.3.0b2 candidate adds Rich terminal views and `atsys monitor` for
+task selection. `atsys tasks` lists active/paused work; `atsys watch task ID`
+opens a live view with p to pause/resume, s twice to stop and q to leave. Keys
+1–5 switch overview, activity, history, hooks and recovery wiring. Direct commands
+are `atsys task pause ID`, `atsys task resume ID` and `atsys task stop ID`.
+Web task rows and details expose the same controls with stop confirmation.
+
+Pause suspends owned local POSIX process groups and excludes operator pause from
+AtSys deadlines; remote requests and provider timers may continue. It requires
+the new watchdog and runners. Named milestones explain their source, while
+existing count-only reports stay readable. Only the independent validator decides
+completion. Closing a monitor leaves task execution running.

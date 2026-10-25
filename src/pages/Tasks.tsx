@@ -63,6 +63,7 @@ export function Tasks({
   const [form, setForm] = useState<TaskConfig | null>(null);
   const [editing, setEditing] = useState<ManagedTask | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stopTarget, setStopTarget] = useState<ManagedTask | null>(null);
   const { taskId } = useParams();
   const navigate = useNavigate();
   const refresh = useCallback(async () => {
@@ -213,6 +214,8 @@ export function Tasks({
         <TaskDetail
           key={selected.id}
           task={selected}
+          pauseSupported={view.daemon?.pauseProtocol === 1}
+          stop={() => setStopTarget(selected)}
           busy={busy}
           action={act}
           back={() => navigate('/tasks')}
@@ -228,9 +231,16 @@ export function Tasks({
               [
                 'Active tasks',
                 view.tasks.filter((t) =>
-                  ['running', 'recovering', 'supervising', 'repairing', 'queued'].includes(
-                    t.status,
-                  ),
+                  [
+                    'running',
+                    'recovering',
+                    'supervising',
+                    'repairing',
+                    'queued',
+                    'pausing',
+                    'paused',
+                    'resuming',
+                  ].includes(t.status),
                 ).length,
                 Activity,
               ],
@@ -301,34 +311,45 @@ export function Tasks({
                 {tasks.map((t) => {
                   const a = t.attempts.at(-1);
                   return (
-                    <button
-                      key={t.id}
-                      className="ops-task-row"
-                      onClick={() => navigate(`/tasks/${t.id}`)}
-                    >
-                      <div className="ops-task-icon">
-                        <Terminal size={20} />
-                      </div>
-                      <div className="ops-task-main">
-                        <strong>{t.config.name}</strong>
-                        <span>{t.config.objective}</span>
-                        <small>{t.config.cwd}</small>
-                      </div>
-                      <div className="ops-task-meta">
-                        <Badge value={t.status} />
-                        <span>
-                          {t.attempts.filter((a) => a.phase === 'worker').length} worker attempts ·{' '}
-                          {t.config.recovery}
-                        </span>
-                        {a?.progress && (
+                    <div className="ops-task-container" key={t.id}>
+                      <button className="ops-task-row" onClick={() => navigate(`/tasks/${t.id}`)}>
+                        <div className="ops-task-icon">
+                          <Terminal size={20} />
+                        </div>
+                        <div className="ops-task-main">
+                          <strong>{t.config.name}</strong>
+                          <span>{t.config.objective}</span>
+                          <small>{t.config.cwd}</small>
+                        </div>
+                        <div className="ops-task-meta">
+                          <Badge value={t.status} />
                           <span>
-                            {a.progress.completed} / {a.progress.total} steps
+                            {t.attempts.filter((a) => a.phase === 'worker').length} worker attempts
+                            · {t.config.recovery}
                           </span>
-                        )}
-                        <Time value={t.updatedAt} />
+                          {a?.progress && (
+                            <span>
+                              {a.progress.completed} / {a.progress.total} steps
+                            </span>
+                          )}
+                          <Time value={t.updatedAt} />
+                        </div>
+                        <ArrowRight size={17} />
+                      </button>
+                      <div
+                        className="ops-task-shortcuts"
+                        role="group"
+                        aria-label={`Controls for ${t.config.name}`}
+                      >
+                        <TaskControls
+                          task={t}
+                          busy={busy}
+                          pauseSupported={view.daemon?.pauseProtocol === 1}
+                          action={act}
+                          stop={() => setStopTarget(t)}
+                        />
                       </div>
-                      <ArrowRight size={17} />
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -341,6 +362,39 @@ export function Tasks({
           </p>
         </>
       )}
+      <Dialog
+        open={!!stopTarget}
+        onClose={() => !busy && setStopTarget(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Stop this task?</DialogTitle>
+        <DialogContent>
+          <p>{stopTarget?.config.name}</p>
+          <p>
+            AtSys will terminate its owned local processes and cancel automatic recovery. Files
+            already changed remain. Remote provider requests may already have been sent.
+          </p>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setStopTarget(null)}>
+            Keep task
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={busy}
+            onClick={() => {
+              if (stopTarget)
+                void act(`/tasks/${stopTarget.id}/stop`).then((result) => {
+                  if (result) setStopTarget(null);
+                });
+            }}
+          >
+            Confirm stop
+          </Button>
+        </DialogActions>
+      </Dialog>
       {form && (
         <TaskForm
           config={form}
@@ -385,13 +439,81 @@ function Wire({
     </div>
   );
 }
+function TaskControls({
+  task,
+  busy,
+  pauseSupported,
+  action,
+  stop,
+}: {
+  task: ManagedTask;
+  busy: boolean;
+  pauseSupported: boolean;
+  action: (path: string) => Promise<unknown>;
+  stop: () => void;
+}) {
+  const active = !['completed', 'stopped', 'needs_attention'].includes(task.status);
+  const supported =
+    pauseSupported &&
+    task.attempts.every(
+      (attempt) => !['starting', 'running'].includes(attempt.status) || attempt.pauseProtocol === 1,
+    ) &&
+    (task.hookRuns ?? []).every((run) => run.status !== 'running' || run.pauseProtocol === 1);
+  return (
+    <>
+      {task.pauseState ? (
+        <Button
+          startIcon={<Play size={14} />}
+          disabled={busy || task.status === 'resuming' || task.stopRequested}
+          onClick={() => void action(`/tasks/${task.id}/resume`)}
+        >
+          {task.status === 'resuming' ? 'Resuming…' : 'Resume task'}
+        </Button>
+      ) : (
+        active && (
+          <Button
+            startIcon={<Pause size={14} />}
+            title={
+              supported
+                ? 'Suspend owned local processes; remote requests may continue'
+                : 'Pause requires an upgraded watchdog and runner; existing older work can still be stopped'
+            }
+            disabled={busy || !supported || task.stopRequested}
+            onClick={() => void action(`/tasks/${task.id}/pause`)}
+          >
+            Pause task
+          </Button>
+        )
+      )}
+      {!task.pauseState && ['needs_attention', 'stopped'].includes(task.status) && (
+        <Button disabled={busy} onClick={() => void action(`/tasks/${task.id}/retry`)}>
+          Retry within policy
+        </Button>
+      )}
+      {!['completed', 'stopped'].includes(task.status) && (
+        <Button
+          color="error"
+          variant="outlined"
+          disabled={busy || task.stopRequested}
+          onClick={stop}
+        >
+          {task.stopRequested ? 'Stopping…' : 'Stop task'}
+        </Button>
+      )}
+    </>
+  );
+}
 function TaskDetail({
   task: t,
   busy,
   action,
   back,
   configure,
+  pauseSupported,
+  stop,
 }: {
+  pauseSupported: boolean;
+  stop: () => void;
   task: ManagedTask;
   busy: boolean;
   action: (path: string, body?: unknown, method?: string) => Promise<unknown>;
@@ -411,21 +533,13 @@ function TaskDetail({
         <Button startIcon={<Settings2 size={15} />} onClick={configure}>
           Edit task wiring
         </Button>
-        {['needs_attention', 'stopped'].includes(t.status) ? (
-          <Button disabled={busy} onClick={() => void action(`/tasks/${t.id}/retry`)}>
-            Retry within policy
-          </Button>
-        ) : (
-          !['completed'].includes(t.status) && (
-            <Button
-              color="error"
-              disabled={busy || t.stopRequested}
-              onClick={() => void action(`/tasks/${t.id}/stop`)}
-            >
-              {t.stopRequested ? 'Stopping…' : 'Stop task'}
-            </Button>
-          )
-        )}
+        <TaskControls
+          task={t}
+          busy={busy}
+          pauseSupported={pauseSupported}
+          action={action}
+          stop={stop}
+        />
       </div>
       <Panel title="What is happening now" eyebrow="CURRENT TASK · NOT RAW TRANSCRIPTS">
         <div className="ops-panel-body">
@@ -463,6 +577,27 @@ function TaskDetail({
             <dt>Next action</dt>
             <dd>{shortText(summary.next, 600)}</dd>
           </dl>
+          {summary.progress && (
+            <section className="ops-milestones" aria-label="Reported milestone plan">
+              <h3>Reported milestone plan</h3>
+              <p>{summary.progressSource?.reporter}</p>
+              <p>{summary.progressSource?.explanation}</p>
+              {summary.milestones.length > 0 && (
+                <ol>
+                  {summary.milestones.map((milestone) => (
+                    <li key={milestone.name}>
+                      <span className="ops-milestone-state">{milestone.status}</span>
+                      {milestone.name}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p>
+                <strong>{summary.acceptance}.</strong> Milestones are reported progress, not
+                acceptance evidence.
+              </p>
+            </section>
+          )}
         </div>
       </Panel>
       <TaskActivity task={t} />

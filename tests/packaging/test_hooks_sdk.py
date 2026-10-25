@@ -1,16 +1,15 @@
 """Run using the installed wheel or PYTHONPATH=python for base SDK checks."""
 
 import asyncio
-from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
-from pathlib import Path
-import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
-from atsys.hooks import Hooks, HookContext, HookResult, main
+from atsys.hooks import HookContext, HookResult, Hooks, main
 
 
 def payload(event="before_run"):
@@ -24,6 +23,30 @@ def payload(event="before_run"):
 
 
 class HooksSDKTests(unittest.TestCase):
+    def test_named_milestone_metadata_and_legacy_compatibility(self):
+        progress = {
+            "completed": 1,
+            "total": 2,
+            "milestones": ["Inspect", "Implement"],
+            "planSource": "Objective and project plan",
+        }
+        self.assertEqual(HookResult(progress=progress).to_dict()["progress"], progress)
+        self.assertEqual(
+            HookResult(progress={"completed": 0.5, "total": 2}).to_dict()["progress"][
+                "completed"
+            ],
+            0.5,
+        )
+        for invalid in (
+            {**progress, "total": 3},
+            {**progress, "completed": 0.5},
+            {**progress, "milestones": ["Inspect", "Inspect"]},
+            {**progress, "planSource": ""},
+            {**progress, "milestones": ["Inspect", ""]},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                HookResult(progress=invalid).to_dict()
+
     def test_sync_async_order_and_rejection(self):
         hooks = Hooks()
         seen = []

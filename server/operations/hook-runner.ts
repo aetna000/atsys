@@ -1,18 +1,27 @@
 import { spawn } from 'node:child_process';
 import { OperationsStore, stamp } from './store.js';
+import { suspended, waitForResume } from './pause.js';
 import { hookResultSchema } from './hooks.js';
 import { redact } from '../control-plane.js';
 import type { HookResult } from '../../shared/operations.js';
 const [directory, taskId, runId] = process.argv.slice(2);
 const store = new OperationsStore(directory);
-const initial = store.update((s) => {
-  const task = s.tasks.find((t) => t.id === taskId);
-  const run = task?.hookRuns?.find((r) => r.id === runId);
-  if (!run || run.status !== 'running' || (run.pid && run.pid !== process.pid)) return null;
-  run.pid = process.pid;
-  run.heartbeatAt = stamp();
-  return { run, cwd: run.context.task.cwd };
-});
+const initial = await (async () => {
+  while (true) {
+    if (!(await waitForResume(store, taskId))) return null;
+    const value = store.update((s) => {
+      const task = s.tasks.find((t) => t.id === taskId);
+      if (task?.pauseState) return 'paused' as const;
+      const run = task?.hookRuns?.find((r) => r.id === runId);
+      if (!run || run.status !== 'running' || (run.pid && run.pid !== process.pid)) return null;
+      run.pid = process.pid;
+      run.heartbeatAt = stamp();
+      return { run, cwd: run.context.task.cwd };
+    });
+    if (value === 'paused') continue;
+    return value;
+  }
+})();
 if (!initial) {
   store.close();
   process.exit(0);
@@ -37,7 +46,7 @@ const child = spawn(run.hook.argv[0], run.hook.argv.slice(1), {
 function finish(status: 'succeeded' | 'failed' | 'timed_out', error?: string) {
   if (done) return;
   done = true;
-  clearTimeout(deadline);
+
   clearInterval(heartbeat);
   let result: HookResult | undefined;
   if (status === 'succeeded') {
@@ -62,20 +71,30 @@ function finish(status: 'succeeded' | 'failed' | 'timed_out', error?: string) {
   process.exit(0);
 }
 // The watchdog kills the entire detached group after the receipt is persisted.
-const deadline = setTimeout(() => {
-  child.kill('SIGKILL');
-  finish('timed_out', 'Hook deadline exceeded');
-}, run.hook.timeoutSeconds * 1000);
 const heartbeat = setInterval(() => {
   try {
     let owned = false;
+    let overdue = false;
     store.update((s) => {
-      const current = s.tasks.find((t) => t.id === taskId)?.hookRuns?.find((r) => r.id === runId);
+      const task = s.tasks.find((t) => t.id === taskId);
+      const current = task?.hookRuns?.find((r) => r.id === runId);
+      if (task && suspended(task)) {
+        owned = true;
+        return;
+      }
       if (current?.status === 'running' && current.pid === process.pid) {
         current.heartbeatAt = stamp();
+        overdue =
+          Date.now() - Date.parse(current.startedAt!) - (current.pausedMs ?? 0) >=
+          run.hook.timeoutSeconds * 1000;
         owned = true;
       }
     });
+    if (overdue) {
+      child.kill('SIGKILL');
+      finish('timed_out', 'Hook deadline exceeded');
+      return;
+    }
     if (!owned) {
       child.kill('SIGKILL');
       process.exit(0);

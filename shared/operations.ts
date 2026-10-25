@@ -1,3 +1,14 @@
+export interface Progress {
+  completed: number;
+  total: number;
+  checkpoint?: string;
+  milestones?: string[];
+  planSource?: string;
+}
+export interface ProgressReporter {
+  kind: 'progress-file' | 'hook';
+  reference: string;
+}
 export const hookEvents = [
   'before_run',
   'after_run',
@@ -32,7 +43,7 @@ export interface HookConfig {
 export interface HookResult {
   message?: string;
   decision?: 'continue' | 'fail' | 'escalate';
-  progress?: { completed: number; total: number; checkpoint?: string };
+  progress?: Progress;
 }
 export interface HookContext {
   protocol: 'atsys-hook-v1';
@@ -88,6 +99,9 @@ export interface HookRun {
   stderr?: string;
   applied?: boolean;
   cleanupConfirmed?: boolean;
+  pauseProtocol?: 1;
+  pausedMs?: number;
+  resumedAt?: string;
 }
 export interface TaskConfig {
   name: string;
@@ -131,7 +145,10 @@ export type TaskStatus =
   | 'repairing'
   | 'needs_attention'
   | 'completed'
-  | 'stopped';
+  | 'stopped'
+  | 'pausing'
+  | 'paused'
+  | 'resuming';
 export interface TaskEvent {
   id: string;
   at: string;
@@ -149,12 +166,18 @@ export interface Attempt {
   lastProgressAt: string;
   lastActivityAt?: string;
   lastObservedAt?: string;
+  progressReporter?: ProgressReporter;
+  pauseProtocol?: 1;
+  pausedMs?: number;
+  resumedAt?: string;
+  progressPauseCreditMs?: number;
+  activityPauseCreditMs?: number;
   endedAt?: string;
   exitCode?: number | null;
   failure?: string;
   output: string;
   config: TaskConfig;
-  progress?: { completed: number; total: number; checkpoint?: string };
+  progress?: Progress;
   validation?: {
     passed: boolean;
     detail: string;
@@ -191,6 +214,8 @@ export interface ManagedTask {
   updatedAt: string;
   nextAttemptAt: string;
   stopRequested: boolean;
+  pausedMs?: number;
+  pauseState?: { requestedAt: string; previousStatus: TaskStatus; resumeRequestedAt?: string };
   attempts: Attempt[];
   events: TaskEvent[];
   attentionReason?: string;
@@ -229,6 +254,7 @@ export interface OperationsState {
     heartbeatAt: string;
     startedAt: string;
     hookProtocol?: 1;
+    pauseProtocol?: 1;
   } | null;
   telegram: TelegramConfig;
   deliveries: Delivery[];

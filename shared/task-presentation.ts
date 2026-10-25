@@ -19,6 +19,9 @@ export function taskPresentation(task: ManagedTask) {
   );
   const state = {
     queued: 'Waiting to start',
+    pausing: 'Pausing local processes',
+    paused: 'Local processes paused',
+    resuming: 'Resuming local processes',
     running: 'Working',
     recovering: 'Recovery scheduled',
     supervising: 'Diagnosing a problem',
@@ -35,8 +38,11 @@ export function taskPresentation(task: ManagedTask) {
         : current?.phase === 'repair'
           ? 'Bounded repair'
           : 'Worker execution';
-  const next =
-    task.status === 'needs_attention'
+  const next = task.pauseState
+    ? task.status === 'paused'
+      ? 'Resume to continue, or stop to terminate owned processes. Remote provider requests may continue.'
+      : 'Waiting for the watchdog to confirm the process control request.'
+    : task.status === 'needs_attention'
       ? (supervisor?.proposal?.blocker?.requiredResolution ??
         task.attentionReason ??
         'Inspect the blocker before retrying.')
@@ -51,8 +57,9 @@ export function taskPresentation(task: ManagedTask) {
               : task.status === 'recovering'
                 ? 'Waiting for the configured retry; saved progress is retained.'
                 : 'No action needed. AtSys is monitoring within the configured limits.';
-  const activity =
-    task.status === 'supervising'
+  const activity = task.pauseState
+    ? 'Local process control is active. Remote provider requests and provider-internal deadlines may continue.'
+    : task.status === 'supervising'
       ? 'The observer detected a problem; the supervisor is investigating now.'
       : task.status === 'repairing'
         ? 'Policy authorized a bounded repair. The repair worker is fixing the cause before retry.'
@@ -64,6 +71,17 @@ export function taskPresentation(task: ManagedTask) {
               ? (task.attentionReason ?? 'A concrete blocker requires attention.')
               : (worker?.progress?.checkpoint ?? phase);
   return {
+    paused: !!task.pauseState,
+    policy: {
+      worker: task.config.worker,
+      model: task.config.model || 'configured default',
+      recovery: task.config.recovery,
+      maxRetries: task.config.maxRetries,
+      allowRepair: task.config.allowRepair,
+      workerTimeout: task.config.timeoutSeconds,
+      taskTimeout: task.config.taskTimeoutSeconds,
+      heartbeatTimeout: task.config.heartbeatTimeoutSeconds,
+    },
     id: task.id,
     name: task.config.name,
     objective: task.config.objective,
@@ -72,6 +90,32 @@ export function taskPresentation(task: ManagedTask) {
     phase,
     activity,
     progress: progressWorker?.progress ?? null,
+    milestones: (progressWorker?.progress?.milestones ?? []).map((name, index) => ({
+      name,
+      status:
+        index < progressWorker!.progress!.completed
+          ? 'reported complete'
+          : index === progressWorker!.progress!.completed &&
+              progressWorker?.status === 'running' &&
+              progressWorker.id === worker?.id
+            ? 'current'
+            : 'pending',
+    })),
+    progressSource: progressWorker
+      ? {
+          reporter: progressWorker.progressReporter
+            ? `${progressWorker.progressReporter.kind === 'hook' ? 'Project hook' : 'Progress file'}: ${progressWorker.progressReporter.reference}`
+            : 'Legacy progress report; reporting source was not recorded',
+          explanation: progressWorker.progress?.milestones
+            ? progressWorker.progress.planSource!
+            : 'Milestone names and their derivation were not recorded. The total came from the progress reporter; AtSys did not prescribe this number.',
+        }
+      : null,
+    acceptance:
+      task.status === 'completed'
+        ? 'Declared validator passed'
+        : 'Independent validation still required',
+
     progressFromPreviousAttempt: !!progressWorker && progressWorker.id !== worker?.id,
     workerStatus:
       worker?.status === 'succeeded' && task.status !== 'completed'
@@ -161,6 +205,12 @@ export function formatTaskStatus(
       : 'Not reported; no percentage assumed',
   );
   if (p.progress?.checkpoint) row('Checkpoint', p.progress.checkpoint);
+  if (p.milestones.length && !compact) {
+    row('Plan source', p.progressSource!.explanation, 3);
+    for (const [index, milestone] of p.milestones.entries())
+      row(`${index + 1} · ${milestone.status}`, milestone.name, 3);
+    row('Acceptance', p.acceptance);
+  }
   row('Worker', `${p.workerStatus}; last runner heartbeat ${age(p.heartbeatAt, now)}`);
   row(
     'Observer',

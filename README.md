@@ -68,6 +68,12 @@ The 0.3.0b1 beta release adds [task lifecycle hooks, native Codex tool/turn call
 For a readable progress view, use `atsys task watch ID` or `atsys task status ID`.
 The [monitor guide](docs/TASK-MONITOR.md) explains snapshots, filtered logs and raw JSON.
 
+The unreleased **0.3.0b2 candidate** adds `atsys monitor` (task picker), Rich live
+views and `atsys task pause/resume/stop ID`. Press **p** to pause/resume, **s twice**
+to stop and **q** to leave a live view. Web rows and details expose the same
+controls. Named milestone plans explain their source; the separate validator
+still decides completion. See [candidate changes](docs/releases/v0.3.0b2.md).
+
 ```sh
 # Submit a coding task and immediately return to the caller.
 npm run atsys -- run --project /absolute/repo --worker codex \

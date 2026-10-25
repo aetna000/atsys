@@ -210,7 +210,7 @@ export function createApp(
       res.json(changeTask(operations, req.params.id as string, 'configure', config, body.revision));
     });
     app.post('/api/tasks/:id/:action', async (req, res) => {
-      const action = z.enum(['stop', 'retry']).parse(req.params.action);
+      const action = z.enum(['stop', 'retry', 'pause', 'resume']).parse(req.params.action);
       if (action === 'retry') {
         const task = operations.read().tasks.find((t) => t.id === req.params.id);
         if (task) await ensureHookSupport(operations, task.config);

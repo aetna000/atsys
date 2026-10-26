@@ -154,6 +154,32 @@ test('readable logs suppress nested command output and strip terminal controls',
   assert.ok(!decision.includes('"instructions"'));
 });
 
+test('pilot completion IDs and unique counts survive readable filtering without inferred success', () => {
+  const output = [
+    { qualified_recovery_epoch: '/private/epoch', tasks: 20 },
+    { pilot_completed: 'morgan/023' },
+    { pilot_completed: 'morgan/085' },
+    { pilot_completed: 'morgan/085' },
+  ]
+    .map((event) => JSON.stringify(event))
+    .join('\n');
+  const entries = attemptLogEntries(output);
+  assert.equal(entries[0].message, 'Pilot 2/20 completed · morgan/085');
+  assert.equal(entries[2].message, 'Pilot 1/20 completed · morgan/023');
+  assert.ok(entries.every((e) => e.kind === 'progress'));
+  assert.ok(entries.every((e) => !e.message.includes('passed')));
+  assert.ok(!readableAttemptLog(output).includes('/private/epoch'));
+  assert.match(readableAttemptLog(JSON.stringify({ pilot_completed: 'alex/102' })), /alex\/102/);
+  assert.ok(!readableAttemptLog(JSON.stringify({ pilot_completed: 'alex/102' })).includes('/20'));
+  const f = fixture();
+  try {
+    f.task.attempts[0].output = output;
+    assert.match(readableTaskLog(f.task), /Pilot 2\/20 completed · morgan\/085/);
+  } finally {
+    f.close();
+  }
+});
+
 test('active diagnosis is not labelled standby and prior reported progress survives retry startup', () => {
   const f = fixture();
   try {

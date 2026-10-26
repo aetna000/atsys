@@ -2,6 +2,159 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
+    "goalContract": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "successCriteria": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "deliverables": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "constraints": {
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "assumptions": {
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "unresolvedDecisions": {
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "stages": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "planSource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "observers": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "signal": {
+                "type": "string",
+                "enum": [
+                  "heartbeat",
+                  "progress",
+                  "activity",
+                  "validator",
+                  "hook"
+                ]
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "cadenceSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 86400
+              },
+              "hookId": {
+                "type": "string",
+                "maxLength": 120
+              }
+            },
+            "required": [
+              "signal",
+              "rationale",
+              "cadenceSeconds"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "recoveryScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "escalationConditions": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "budget": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "version",
+        "successCriteria",
+        "deliverables",
+        "constraints",
+        "assumptions",
+        "unresolvedDecisions",
+        "stages",
+        "planSource",
+        "observers",
+        "recoveryScope",
+        "escalationConditions",
+        "budget"
+      ],
+      "additionalProperties": false
+    },
+    "outcomeFile": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "outcomeRequired": {
+      "type": "boolean"
+    },
     "name": {
       "type": "string",
       "minLength": 1,

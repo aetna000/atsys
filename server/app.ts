@@ -8,7 +8,8 @@ import { withDefaults, validateConfig } from './operations/config.js';
 import { ControlPlane, DomainError } from './control-plane.js';
 import { doctor } from './doctor.js';
 import { OperationsStore } from './operations/store.js';
-import { createTask, changeTask } from './operations/tasks.js';
+import { verifyReport } from './operations/reports.js';
+import { createTask, changeTask, generateRetrospectiveReport } from './operations/tasks.js';
 import { configureTelegram, queueTestMessage } from './operations/telegram.js';
 import { daemonHealthy } from './operations/watchdog.js';
 import {
@@ -199,6 +200,31 @@ export function createApp(
       const task = createTask(operations, config);
       ensureDaemon(operations);
       res.status(201).json(task);
+    });
+    app.get('/api/tasks/:id/report', (req, res) => {
+      const task = operations.read().tasks.find((t) => t.id === req.params.id);
+      if (!task) throw new DomainError('Task not found', 404);
+      const report = task.reports?.at(-1);
+      if (!report)
+        throw new DomainError(
+          task.reportError ??
+            'No durable report; explicit retrospective generation is available for terminal legacy tasks.',
+          404,
+        );
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(verifyReport(operations.directory, report));
+    });
+    app.post('/api/tasks/:id/report', (req, res) => {
+      const body = z
+        .object({ outcomeFile: z.string().max(1000).optional() })
+        .strict()
+        .parse(req.body ?? {});
+      const report = generateRetrospectiveReport(
+        operations,
+        req.params.id as string,
+        body.outcomeFile,
+      );
+      res.status('error' in report ? 409 : 200).json(report);
     });
     app.patch('/api/tasks/:id', async (req, res) => {
       const body = z

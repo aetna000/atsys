@@ -3,6 +3,7 @@ import { realpathSync, statSync } from 'node:fs';
 import { isAbsolute, resolve, relative, sep } from 'node:path';
 import { taskDefaults, type TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
+import { goalContractSchema, guardGoal } from './goal.js';
 import { hookSchema } from './hooks.js';
 const effort = z.enum(['low', 'medium', 'high', 'xhigh']);
 const arg = z
@@ -11,6 +12,9 @@ const arg = z
   .refine((v) => !v.includes('\0'), 'NUL bytes are not allowed');
 export const configSchema = z
   .object({
+    goalContract: goalContractSchema.optional(),
+    outcomeFile: z.string().max(1000).optional(),
+    outcomeRequired: z.boolean().optional(),
     name: z.string().trim().min(1).max(120),
     objective: z.string().trim().min(3).max(6000),
     cwd: z.string().min(1).max(2000),
@@ -63,7 +67,7 @@ export function validateConfig(input: unknown): TaskConfig {
     throw new DomainError('Command requires an executable in argv[0]', 400);
   if (c.resumeArgv.length && !c.resumeArgv[0].trim())
     throw new DomainError('Resume executable cannot be empty', 400);
-  for (const path of [c.artifact, c.progressFile, ...c.requiredArtifacts])
+  for (const path of [c.artifact, c.progressFile, c.outcomeFile ?? '', ...c.requiredArtifacts])
     if (path && (isAbsolute(path) || !inside(c.cwd, resolve(c.cwd, path))))
       throw new DomainError(
         'Artifact and progress paths must be inside the working directory',
@@ -79,6 +83,9 @@ export function validateConfig(input: unknown): TaskConfig {
     !c.hooks.some((h) => h.events.includes('on_tick'))
   )
     throw new DomainError('Stall detection requires a progress JSON file or an on_tick hook', 400);
+  if (c.outcomeRequired && !c.outcomeFile)
+    throw new DomainError('Required outcome needs outcomeFile', 400);
+  guardGoal(c);
   return c;
 }
 export const withDefaults = (input: Partial<TaskConfig>) =>

@@ -10,3 +10,10 @@ history. Missing/stale telemetry and setup units must not imply benchmark comple
 The dashboard prioritizes the same summary, preserves worker progress during diagnosis,
 and moves verbose plans/tool output behind explicit disclosure controls. Screenshots and
 desktop/mobile and narrow-terminal tests assess information hierarchy, not human-study scores.
+
+## Pilot progress visibility correction (2026-10-26)
+
+Recognize existing structured pilot completion events in readable CLI/dashboard
+activity. Show the task ID and unique completed count against the explicitly
+reported epoch task total. Preserve raw output, do not infer pass/validation or
+unknown totals, and never restart or edit a frozen benchmark to change its display.

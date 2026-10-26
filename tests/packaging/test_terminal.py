@@ -249,6 +249,13 @@ class TerminalPTYTests(unittest.TestCase):
                 validationArgv=[cli.node_executable(), "-e", "process.exit(0)"],
                 timeoutSeconds=60,
             )
+            value["plan"] = "Exercise owned PTY controls with eight observed stages; verify through this test."
+            value["goalContract"].update(
+                successCriteria=["Owned controls preserve observed output"], deliverables=["progress.json"],
+                unresolvedDecisions=[], stages=[f"Milestone {i+1}" for i in range(8)], planSource="Project fixture plan",
+                observers=[{"signal":"progress","cadenceSeconds":1,"rationale":"Observe real fixture stages"}, {"signal":"validator","cadenceSeconds":1,"rationale":"Declared process check; PTY behavior is independently checked by this test"}],
+                recoveryScope="No automatic repair", escalationConditions=["Control ownership cannot be verified"], budget="Local fixture only; no provider calls",
+            )
             config.write_text(json.dumps(value))
             submitted = json.loads(run("task", "submit", "--config", str(config)))
             task_id = submitted["id"]

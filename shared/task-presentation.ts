@@ -47,7 +47,7 @@ export function taskPresentation(task: ManagedTask) {
         task.attentionReason ??
         'Inspect the blocker before retrying.')
       : task.status === 'completed'
-        ? 'No action needed. The declared acceptance check passed.'
+        ? 'Review the durable outcome report, deliverables and any domain failures or limitations.'
         : task.status === 'stopped'
           ? 'Stopped. Review saved state before authorizing a retry.'
           : task.status === 'supervising'
@@ -71,6 +71,10 @@ export function taskPresentation(task: ManagedTask) {
               ? (task.attentionReason ?? 'A concrete blocker requires attention.')
               : (worker?.progress?.checkpoint ?? phase);
   return {
+    goal: task.config.objective,
+    successCriteria: task.config.goalContract?.successCriteria ?? [],
+    report: task.reports?.at(-1),
+    reportError: task.reportError,
     paused: !!task.pauseState,
     policy: {
       worker: task.config.worker,
@@ -211,6 +215,14 @@ export function formatTaskStatus(
       row(`${index + 1} · ${milestone.status}`, milestone.name, 3);
     row('Acceptance', p.acceptance);
   }
+  row('Success criteria', p.successCriteria.join('; ') || 'Legacy objective and validator');
+  row(
+    'Outcome report',
+    p.reportError ??
+      (p.report
+        ? `atsys task report ${task.id} · ${p.report.retrospective ? 'retrospective' : 'automatic'}`
+        : 'Pending / legacy: explicit retrospective generation available'),
+  );
   row('Worker', `${p.workerStatus}; last runner heartbeat ${age(p.heartbeatAt, now)}`);
   row(
     'Observer',
@@ -247,6 +259,8 @@ function messageText(value: unknown, depth = 0): string {
   }
   if (!value || typeof value !== 'object') return '';
   const row = value as Record<string, any>;
+  if (typeof row.pilot_completed === 'string')
+    return `Pilot task completed: ${shortText(row.pilot_completed, 160)}`;
   if (typeof row.reason === 'string')
     return `Decision: ${row.action ?? 'recorded'}. ${plainText(row.reason)}`;
   for (const key of ['message', 'text', 'summary', 'detail'])
@@ -259,6 +273,8 @@ function messageText(value: unknown, depth = 0): string {
 export const readableMessage = (value: string, limit = 600) => shortText(messageText(value), limit);
 export function attemptLogEntries(output: string, limit = 100): ActivityEntry[] {
   const entries: ActivityEntry[] = [];
+  const pilotCompleted = new Set<string>();
+  let pilotTotal: number | undefined;
   let lines = output.split('\n');
   try {
     const document = JSON.parse(output);
@@ -277,7 +293,18 @@ export function attemptLogEntries(output: string, limit = 100): ActivityEntry[] 
       const event = JSON.parse(line);
       const item = event?.item ?? event;
       const type = item?.type;
-      if (type === 'agent_message' || type === 'message') {
+      if (
+        typeof event.qualified_recovery_epoch === 'string' &&
+        Number.isSafeInteger(event.tasks) &&
+        event.tasks > 0
+      ) {
+        pilotTotal = event.tasks;
+        push('progress', `Pilot qualified: ${pilotTotal} tasks; awaiting completion reports`);
+      } else if (typeof event.pilot_completed === 'string' && event.pilot_completed.trim()) {
+        pilotCompleted.add(event.pilot_completed);
+        const count = pilotTotal === undefined ? '' : ` ${pilotCompleted.size}/${pilotTotal}`;
+        push('progress', `Pilot${count} completed · ${shortText(event.pilot_completed, 160)}`);
+      } else if (type === 'agent_message' || type === 'message') {
         const text =
           item.text ??
           item.content
@@ -382,8 +409,10 @@ export function taskLogEntries(
 export function readableTaskLog(task: ManagedTask, limit = 12) {
   const entries = taskLogEntries(task, limit);
   return (
-    entries.map((entry) => `[${entry.phase} · ${entry.kind}] ${entry.message}`).join('\n\n') ||
-    'Worker has not started.'
+    (entries.map((entry) => `[${entry.phase} · ${entry.kind}] ${entry.message}`).join('\n\n') ||
+      'Worker has not started.') +
+    (task.reports?.at(-1) ? '\n\n' + task.reports.at(-1)!.markdown : '') +
+    (task.reportError ? '\n\n' + task.reportError : '')
   );
 }
 export function readableAttemptLog(output: string, limit = 12) {

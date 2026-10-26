@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { suspended, taskElapsed } from './pause.js';
+import { contractProgress } from './goal.js';
 import { mergeProgress } from './progress.js';
 import { runtimeArgs } from '../runtime.js';
 import { OperationsStore, stamp, taskEvent, enqueue } from './store.js';
@@ -112,7 +113,10 @@ export class HookService {
       task.attempts.at(-1)?.id === attempt!.id
     ) {
       try {
-        const p = mergeProgress(attempt!.progress, run.result.progress);
+        const p = mergeProgress(
+          attempt!.progress,
+          contractProgress(attempt!.config, run.result.progress),
+        );
         const key = JSON.stringify([p.completed, p.total, p.checkpoint]);
         attempt!.hookProgressKeys ??= [];
         const old =

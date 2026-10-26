@@ -7,7 +7,10 @@
   "model": "",
   "reasoningEffort": "medium",
   "validator": "command",
-  "validationArgv": ["npm", "test"],
+  "validationArgv": [
+    "npm",
+    "test"
+  ],
   "validationTimeoutSeconds": 600,
   "requiredArtifacts": [],
   "timeoutSeconds": 21600,
@@ -22,5 +25,21 @@
   "supervisorTimeoutSeconds": 300,
   "maxSupervisorCalls": 2,
   "allowRepair": true,
-  "repairTimeoutSeconds": 600
+  "repairTimeoutSeconds": 600,
+  "goalContract": {
+    "version": 1,
+    "successCriteria": [],
+    "deliverables": [],
+    "constraints": [],
+    "assumptions": [],
+    "unresolvedDecisions": [
+      "Define material goal choices and acceptance evidence before launch"
+    ],
+    "stages": [],
+    "planSource": "",
+    "observers": [],
+    "recoveryScope": "",
+    "escalationConditions": [],
+    "budget": ""
+  }
 }

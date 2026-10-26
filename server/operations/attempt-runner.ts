@@ -13,6 +13,8 @@ import { createHash } from 'node:crypto';
 import { OperationsStore, stamp, taskEvent } from './store.js';
 import { suspended, waitForResume } from './pause.js';
 import { mergeProgress } from './progress.js';
+import { contractProgress } from './goal.js';
+import { captureOutcome } from './reports.js';
 import { inside } from './config.js';
 import { codexInvocation, proposalParser, proposalSchema, repairSchema } from './codex.js';
 import { redact, validateResult } from '../control-plane.js';
@@ -107,7 +109,10 @@ function readProgress() {
   const { completed, total, checkpoint, milestones, planSource } = JSON.parse(
     safeFile(c.progressFile, 64000).data,
   );
-  return mergeProgress(progress, { completed, total, checkpoint, milestones, planSource });
+  return mergeProgress(
+    progress,
+    contractProgress(c, { completed, total, checkpoint, milestones, planSource }),
+  );
 }
 function captureProgress() {
   const p = readProgress();
@@ -287,7 +292,14 @@ function finish() {
         validation?.passed &&
         (attempt.phase === 'validator' || (attempt.phase === 'worker' && c.validator !== 'command'))
       ) {
-        validation.artifacts = c.requiredArtifacts.map((path) => {
+        if (c.outcomeRequired) captureOutcome(c); // Validate structured evidence before accepting.
+        const artifactPaths = [
+          ...new Set([
+            ...c.requiredArtifacts,
+            ...(c.outcomeRequired && c.outcomeFile ? [c.outcomeFile] : []),
+          ]),
+        ];
+        validation.artifacts = artifactPaths.map((path) => {
           const artifact = safeFile(path, 20_000_000);
           return {
             path,

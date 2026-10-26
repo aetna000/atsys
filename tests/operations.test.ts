@@ -11,13 +11,15 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { OperationsStore, stamp } from '../server/operations/store.js';
 import { Watchdog } from '../server/operations/watchdog.js';
 import { createTask, changeTask } from '../server/operations/tasks.js';
 import { withDefaults } from '../server/operations/config.js';
-import { killAttempt } from '../server/operations/processes.js';
+import { killAttempt, processAlive } from '../server/operations/processes.js';
 import { configureTelegram, queueTestMessage, deliverNext } from '../server/operations/telegram.js';
-import type { ManagedTask, TaskConfig } from '../shared/operations.js';
+import type { Attempt, ManagedTask, TaskConfig } from '../shared/operations.js';
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function fixture(
   fn: (f: {
@@ -95,37 +97,63 @@ test('real task crash resumes declared checkpoint command and validates artifact
   }));
 test('watchdog takeover adopts running attempt; killed runner is detected and recovery bounded', async () =>
   fixture(async ({ submit, until, store, watchdog }) => {
-    const task = submit({
-      argv: [process.execPath, '-e', 'setInterval(()=>console.log("alive"),200)'],
-      recovery: 'restart',
-      maxRetries: 1,
+    const unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {
+      detached: true,
+      stdio: 'ignore',
     });
-    let t = await until(task.id, (t) => t.attempts[0]?.status === 'running');
-    const first = t.attempts[0];
-    const second = new Watchdog(store);
-    assert.equal(second.claim(), false);
-    store.update((s) => {
-      s.daemon!.heartbeatAt = new Date(0).toISOString();
-    });
-    assert.equal(second.claim(), true);
-    second.tick();
-    assert.equal(store.read().tasks[0].attempts.length, 1);
-    assert.equal(store.read().tasks[0].attempts[0].pid, first.pid);
-    // Return ownership to the fixture's tick loop after proving adoption and old-owner fencing.
-    watchdog.tick();
-    assert.equal(store.read().daemon!.owner, second.owner);
-    store.update((s) => {
-      s.daemon!.heartbeatAt = new Date(0).toISOString();
-    });
-    assert.equal(watchdog.claim(), true);
-    process.kill(first.pid!, 'SIGKILL');
-    t = await until(task.id, (t) => t.attempts.length === 2 && t.attempts[1].status === 'running');
-    assert.equal(t.attempts[0].status, 'lost');
-    assert.equal(t.attempts[0].cleanupConfirmed, true);
-    process.kill(t.attempts[1].pid!, 'SIGKILL');
-    t = await until(task.id, (t) => t.status === 'needs_attention');
-    assert.equal(t.attempts.length, 2);
-    assert.match(t.attentionReason!, /budget exhausted/i);
+    const unrelatedClosed = once(unrelated, 'close');
+    try {
+      await once(unrelated, 'spawn');
+      const foreign = { pid: unrelated.pid!, id: 'unrelated-live-process' } as Attempt;
+      assert.equal(killAttempt(foreign), false);
+      assert.equal(processAlive(unrelated.pid!), true);
+      const task = submit({
+        argv: [process.execPath, '-e', 'setInterval(()=>console.log("alive"),200)'],
+        recovery: 'restart',
+        maxRetries: 1,
+      });
+      let t = await until(
+        task.id,
+        (t) => t.attempts[0]?.status === 'running' && t.attempts[0].output.includes('alive'),
+      );
+      const first = t.attempts[0];
+      const second = new Watchdog(store);
+      assert.equal(second.claim(), false);
+      store.update((s) => {
+        s.daemon!.heartbeatAt = new Date(0).toISOString();
+      });
+      assert.equal(second.claim(), true);
+      second.tick();
+      assert.equal(store.read().tasks[0].attempts.length, 1);
+      assert.equal(store.read().tasks[0].attempts[0].pid, first.pid);
+      // Return ownership to the fixture's tick loop after proving adoption and old-owner fencing.
+      watchdog.tick();
+      assert.equal(store.read().daemon!.owner, second.owner);
+      store.update((s) => {
+        s.daemon!.heartbeatAt = new Date(0).toISOString();
+      });
+      assert.equal(watchdog.claim(), true);
+      process.kill(first.pid!, 'SIGKILL');
+      t = await until(
+        task.id,
+        (t) =>
+          t.attempts.length === 2 &&
+          t.attempts[1].status === 'running' &&
+          t.attempts[1].output.includes('alive'),
+      );
+      assert.equal(t.attempts[0].status, 'lost');
+      assert.equal(t.attempts[0].cleanupConfirmed, true);
+      process.kill(t.attempts[1].pid!, 'SIGKILL');
+      t = await until(task.id, (t) => t.status === 'needs_attention');
+      assert.equal(t.attempts.length, 2);
+      assert.match(t.attentionReason!, /budget exhausted/i);
+      assert.equal(t.attempts[1].cleanupConfirmed, true);
+      assert.equal(killAttempt(foreign), false);
+      assert.equal(processAlive(unrelated.pid!), true, 'recovery preserves unrelated live work');
+    } finally {
+      unrelated.kill('SIGKILL');
+      await unrelatedClosed;
+    }
   }));
 test('live process with frozen progress escalates; changing unrelated timestamps is not progress', async () =>
   fixture(async ({ submit, until }) => {

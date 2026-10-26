@@ -14,6 +14,18 @@ from atsys.cli import PACKAGE, RUNTIME, node_executable
 from atsys import __version__
 
 
+def qualify_fixture(config):
+    """Complete conversational-template fields for these explicit local fixtures."""
+    config["plan"] = "Run the declared local fixture, independently validate it and retain the report."
+    config["goalContract"].update(
+        successCriteria=["Declared fixture validator passes"], deliverables=["Durable terminal report"],
+        unresolvedDecisions=[], stages=["Execute fixture", "Validate fixture"], planSource="Installed package acceptance fixture",
+        observers=[{"signal":"validator","cadenceSeconds":1,"rationale":"Independent fixture acceptance command"}] + [
+            {"signal":"hook","hookId":h["id"],"cadenceSeconds":30,"rationale":"Bounded fixture readiness/policy callback"} for h in config.get("hooks", [])
+        ], recoveryScope="Fixture workspace only; no automatic repair", escalationConditions=["Fixture validation fails"], budget="Local fixture only; no provider calls",
+    )
+
+
 class InstalledWheelTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="atsys-wheel-")
@@ -86,6 +98,7 @@ async def ready(ctx):
 ''')
         config=json.loads(self.cli('task','template','--objective','Verify packaged lifecycle hooks').stdout)
         config.update(worker='command',goalMonitoring=False,recovery='notify',argv=[node_executable(),'-e',"if(!require('fs').existsSync('hook-proof'))process.exit(7)"],validationArgv=[node_executable(),'-e',"if(!require('fs').readFileSync('hook-proof','utf8').startsWith('hook-'))process.exit(8)"],hooks=[{'id':'python-ready','events':['before_run'],'phases':['worker'],'argv':[sys.executable,'-m','atsys.hooks','run',str(script)+':hooks'],'timeoutSeconds':10}])
+        qualify_fixture(config)
         task_path=self.project/'hook-task.json';task_path.write_text(json.dumps(config))
         task_id=json.loads(self.cli('task','submit','--config',str(task_path)).stdout)['id']
         for _ in range(60):
@@ -102,6 +115,7 @@ async def ready(ctx):
         target.write_text(json.dumps({'hooks':{'SessionStart':[other]}}))
         config=json.loads(self.cli('task','template','--objective','Verify native hook installation').stdout)
         config.update(validationArgv=[node_executable(),'-e','process.exit(0)'],hooks=[{'id':'native-policy','events':['codex_pre_tool'],'argv':[node_executable(),'-e',"console.log('{}')"]}])
+        qualify_fixture(config)
         path=self.project/'native-task.json';path.write_text(json.dumps(config))
         for _ in range(2):self.cli('hooks','codex-install','--config',str(path))
         document=json.loads(target.read_text())
@@ -139,11 +153,13 @@ async def ready(ctx):
         self.assertTrue(config["networkAccess"])
         self.assertTrue(config["goalMonitoring"])
         config.update(worker="command", argv=[node_executable(), "-e", "require('fs').writeFileSync('DO_NOT_RUN','bad')"], validator="exit-code", recovery="notify")
+        qualify_fixture(config)
         task_path.write_text(json.dumps(config))
         report = json.loads(self.cli("doctor", "--config", str(task_path)).stdout)
         self.assertTrue(report["ready"])
         self.assertFalse((self.project / "DO_NOT_RUN").exists())
         config["argv"] = ["atsys-nonexistent-program-for-test"]
+        qualify_fixture(config)
         task_path.write_text(json.dumps(config))
         failed = self.cli("doctor", "--config", str(task_path), check=False)
         self.assertNotEqual(failed.returncode, 0)
@@ -165,6 +181,7 @@ async def ready(ctx):
         self.assertNotEqual(self.cli("task", "template", "--objective", "replace", "--output", str(task_path), check=False).returncode, 0)
         config = json.loads(task_path.read_text())
         config.update(worker="command", argv=[node_executable(), "-e", "require('fs').writeFileSync('feature.txt','works')"], validationArgv=[node_executable(), "-e", "process.exit(require('fs').readFileSync('feature.txt','utf8')==='works'?0:1)"], requiredArtifacts=["feature.txt"], recovery="notify")
+        qualify_fixture(config)
         task_path.write_text(json.dumps(config))
         url = self.cli("ui", "--no-open").stdout.strip()
         self.assertEqual(self.cli("ui", "--no-open").stdout.strip(), url)

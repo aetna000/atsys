@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.3.0b1
+python -m pip install --upgrade atsys==0.3.0b2
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b1 on PyPI](https://pypi.org/project/atsys/0.3.0b1/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b1) and [release notes](docs/releases/v0.3.0b1.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b2 on PyPI](https://pypi.org/project/atsys/0.3.0b2/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b2) and [release notes](docs/releases/v0.3.0b2.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## Develop AtSys from source
 
@@ -68,11 +68,11 @@ The 0.3.0b1 beta release adds [task lifecycle hooks, native Codex tool/turn call
 For a readable progress view, use `atsys task watch ID` or `atsys task status ID`.
 The [monitor guide](docs/TASK-MONITOR.md) explains snapshots, filtered logs and raw JSON.
 
-The unreleased **0.3.0b2 candidate** adds `atsys monitor` (task picker), Rich live
+The **0.3.0b2 beta** adds `atsys monitor` (task picker), Rich live
 views and `atsys task pause/resume/stop ID`. Press **p** to pause/resume, **s twice**
 to stop and **q** to leave a live view. Web rows and details expose the same
 controls. Named milestone plans explain their source; the separate validator
-still decides completion. See [candidate changes](docs/releases/v0.3.0b2.md).
+still decides completion. See [release notes](docs/releases/v0.3.0b2.md).
 
 ```sh
 # Submit a coding task and immediately return to the caller.

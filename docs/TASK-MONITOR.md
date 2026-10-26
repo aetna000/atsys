@@ -1,6 +1,6 @@
 # Monitor and control coding tasks
 
-The unreleased 0.3.0b2 candidate adds a Rich terminal interface and durable local
+AtSys 0.3.0b2 adds a Rich terminal interface and durable local
 pause/resume. These controls require the new watchdog and new task runners.
 
 ```sh

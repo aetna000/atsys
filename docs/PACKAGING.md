@@ -1,10 +1,10 @@
 # Python installation and Codex onboarding
 
-The 0.2.1 wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
+The wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
 
 ## Install the published release
 
-The hook/UI beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b1`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b1.md) and restart the upgraded watchdog before submitting hook tasks.
+The terminal/control beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b2`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b2.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.
 
 ```sh
 python -m pip install --upgrade atsys==0.2.1

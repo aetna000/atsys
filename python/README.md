@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.3.0b1
+pip install --upgrade atsys==0.3.0b2
 cd /path/to/your/project
 atsys init
 ```
@@ -41,7 +41,7 @@ The 0.3.0b1 beta release adds project lifecycle callbacks (`atsys hooks run file
 
 The 0.3.0b1 beta UI exposes operational tasks and service/Telegram settings. Activity decodes structured logs, shows newest entries first across all attempts, and supports attempt/text filters and pause display. `atsys task logs ID` shows the same readable activity; the live monitor places the latest message near the top. Raw retained output remains available explicitly.
 
-The unreleased 0.3.0b2 candidate adds Rich terminal views and `atsys monitor` for
+The 0.3.0b2 beta adds Rich terminal views and `atsys monitor` for
 task selection. `atsys tasks` lists active/paused work; `atsys watch task ID`
 opens a live view with p to pause/resume, s twice to stop and q to leave. Keys
 1–5 switch overview, activity, history, hooks and recovery wiring. Direct commands

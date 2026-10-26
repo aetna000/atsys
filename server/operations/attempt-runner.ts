@@ -16,7 +16,9 @@ import { mergeProgress } from './progress.js';
 import { contractProgress } from './goal.js';
 import { captureOutcome } from './reports.js';
 import { inside } from './config.js';
-import { codexInvocation, proposalParser, proposalSchema, repairSchema } from './codex.js';
+import { proposalParser, proposalSchema, repairSchema } from './codex.js';
+import { agentInvocation, ProviderResult } from './providers.js';
+import { providerFor } from '../../shared/providers.js';
 import { redact, validateResult } from '../control-plane.js';
 import type { Attempt } from '../../shared/operations.js';
 
@@ -83,17 +85,19 @@ if (attempt.phase === 'validator') argv = c.validationArgv;
 let prompt: string | undefined;
 if (
   ['supervisor', 'repair'].includes(attempt.phase) ||
-  (attempt.phase === 'worker' && c.worker === 'codex')
+  (attempt.phase === 'worker' && c.worker !== 'command')
 ) {
   writeFileSync(
     schemaPath,
     JSON.stringify(attempt.phase === 'repair' ? repairSchema : proposalSchema),
     { mode: 0o600 },
   );
-  const invocation = codexInvocation(task, attempt, schemaPath, resultPath);
+  const invocation = agentInvocation(task, attempt, schemaPath, resultPath, attemptDir);
   argv = invocation.argv;
   prompt = invocation.prompt;
 }
+const provider = providerFor(c, attempt.phase);
+const providerResult = new ProviderResult(provider ?? 'command');
 let finished = false;
 let failure: string | undefined;
 let exitCode: number | null = null;
@@ -161,6 +165,7 @@ function persistProgress(a: Attempt) {
   }
 }
 function append(text: string) {
+  providerResult.feed(text);
   output = (output + redact(text) + '\n').slice(-32000);
 }
 function feed(stream: keyof typeof buffers, chunk: Buffer) {
@@ -181,6 +186,8 @@ const child = spawn(argv[0], argv.slice(1), {
     ATSYS_DATA_DIR: store.directory,
     ATSYS_TASK_ID: task.id,
     ATSYS_ATTEMPT_ID: attempt.id,
+    ATSYS_PROVIDER: provider ?? 'command',
+    ATSYS_ATTEMPT_PHASE: attempt.phase,
   },
 });
 child.stdout.on('data', (b: Buffer) => feed('stdout', b));
@@ -220,21 +227,24 @@ function finish() {
     c.hooks.some(
       (h) =>
         (!h.phases.length || h.phases.includes(attempt.phase)) &&
-        h.events.some((e) => e.startsWith('codex_')),
+        h.events.some((e) => e.startsWith('codex_') || e.startsWith('agent_')),
     ) &&
     !store
       .read()
       .tasks.find((t) => t.id === taskId)
       ?.attempts.find((a) => a.id === attemptId)?.nativeHooksConnectedAt
   )
-    failure =
-      'Native Codex hooks were not connected. Review and trust the AtSys bridge in Codex /hooks; no hook-trust bypass is enabled.';
+    failure = `Native ${provider} hooks were not connected. Review provider hook support/trust and AtSys bridge settings; no trust bypass is enabled.`;
   if (!failure) {
     try {
+      providerResult.check();
       if (['supervisor', 'repair'].includes(attempt.phase)) {
-        if (!existsSync(resultPath) || statSync(resultPath).size > 64000)
+        if (provider === 'codex' && (!existsSync(resultPath) || statSync(resultPath).size > 64000))
           throw new Error('Missing or oversized structured response');
-        const result = JSON.parse(readFileSync(resultPath, 'utf8'));
+        const result =
+          provider === 'codex'
+            ? JSON.parse(readFileSync(resultPath, 'utf8'))
+            : providerResult.result();
         if (attempt.phase === 'supervisor') proposal = proposalParser.parse(result);
         else {
           repairResult = z

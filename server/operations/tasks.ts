@@ -1,3 +1,4 @@
+import { providerFor } from '../../shared/providers.js';
 import { persistReport, terminal } from './reports.js';
 import type { ManagedTask, TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
@@ -5,6 +6,23 @@ import { creditPause, taskElapsed } from './pause.js';
 import { validateConfig } from './config.js';
 import { OperationsStore, stamp, taskEvent, uid } from './store.js';
 export function requireHookSupport(store: OperationsStore, config: TaskConfig) {
+  const agent = ['worker', 'supervisor', 'repair'].some((phase) => {
+    const p = providerFor(config, phase as 'worker' | 'supervisor' | 'repair');
+    return p && p !== 'codex';
+  });
+  const owner = store.read().daemon;
+  const modern =
+    agent ||
+    config.supervisorProvider ||
+    config.repairProvider ||
+    config.repairModel ||
+    config.repairEffort ||
+    config.hooks.some((h) => h.events.some((e) => e.startsWith('agent_')));
+  if (modern && owner && owner.providerProtocol !== 1)
+    throw new DomainError(
+      'This task requires an upgraded multi-provider watchdog. Restart the watchdog from this runtime; existing work is preserved.',
+      409,
+    );
   if (!config.hooks.length) return;
   const daemon = store.read().daemon;
   if (!daemon || Date.now() - Date.parse(daemon.heartbeatAt) >= 10000 || daemon.hookProtocol !== 1)
@@ -29,7 +47,7 @@ export function createTask(store: OperationsStore, input: unknown) {
       attempts: [],
       events: [],
     };
-    if (config.worker === 'codex' && config.goalMonitoring && !config.progressFile) {
+    if (config.worker !== 'command' && config.goalMonitoring && !config.progressFile) {
       config.progressFile = `.atsys/progress/${task.id}.json`;
       config.progressTimeoutSeconds ||= 600;
     }

@@ -47,7 +47,9 @@ def environment(node: str) -> dict[str, str]:
                 env["ATSYS_PORT"] = str(port)
         except (OSError, ValueError):
             pass
-    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), str(Path(node).parent), env.get("PATH", "")])
+    # Our runtime is launched by absolute path. Preserve the user's Node for
+    # native provider launchers (the bundled Python wheel may use Rosetta).
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), env.get("PATH", ""), str(Path(node).parent)])
     return env
 
 
@@ -67,14 +69,19 @@ def _private_json(path: Path, value: object, *, replace: bool = True) -> None:
         stream.write(json.dumps(value, indent=2) + "\n")
 
 
-def install_integration(project: Path, *, remove: bool = False) -> dict:
+def install_integration(project: Path, *, remove: bool = False, provider: str = "codex") -> dict:
     project = project.resolve(strict=True)
-    target = project / ".agents/skills/atsys"
-    manifest = project / ".atsys/codex-integration.json"
+    if provider not in ("codex", "copilot", "claude"):
+        raise ValueError("Unknown coding provider")
+    target = project / {"codex": ".agents/skills/atsys", "copilot": ".github/skills/atsys", "claude": ".claude/skills/atsys"}[provider]
+    manifest = project / f".atsys/{provider}-integration.json"
+    resources = RESOURCES / f"{provider}-skill"
     if not target.resolve().is_relative_to(project) or not manifest.resolve().is_relative_to(project):
         raise RuntimeError("Integration paths must remain inside this repository.")
     tracked = json.loads(manifest.read_text()) if manifest.exists() else {}
-    files = {str(p.relative_to(RESOURCES / "codex-skill")): p.read_bytes() for p in (RESOURCES / "codex-skill").rglob("*") if p.is_file()}
+    if not (resources / "SKILL.md").is_file():
+        raise RuntimeError(f"Missing packaged skill for {provider}")
+    files = {str(p.relative_to(resources)): p.read_bytes() for p in resources.rglob("*") if p.is_file()}
     digest = lambda content: hashlib.sha256(content).hexdigest()
     if remove:
         if not tracked:
@@ -103,7 +110,7 @@ def install_integration(project: Path, *, remove: bool = False) -> dict:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
     _private_json(manifest, {"version": 1, "packageVersion": __version__, "files": {name: digest(content) for name, content in files.items()}})
-    return {"integration": "installed", "skill": str(target / "SKILL.md"), "invoke": "$atsys <your objective>"}
+    return {"integration": "installed", "skill": str(target / "SKILL.md"), "invoke": "$atsys <your objective>" if provider == "codex" else "Use the atsys skill to <your objective>"}
 
 
 def health(port: int) -> dict | None:
@@ -171,8 +178,9 @@ def dashboard(*, port: int | None = None, open_browser: bool = True) -> str:
 
 
 def initialize(args: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="atsys init", description="Attach a repository, install Codex integration and start supervision.")
+    parser = argparse.ArgumentParser(prog="atsys init", description="Attach a repository, install a coding-agent skill and start supervision.")
     parser.add_argument("--project", type=Path, default=Path.cwd())
+    parser.add_argument("--provider", choices=("codex", "copilot", "claude"), default="codex")
     parser.add_argument("--no-service", action="store_true")
     parser.add_argument("--no-dashboard", action="store_true")
     parser.add_argument("--open", action="store_true", help="Open the dashboard browser tab")
@@ -189,10 +197,10 @@ def initialize(args: list[str]) -> int:
         raise RuntimeError("Unrecognized existing project configuration; preserving it.")
     if existing and existing.get("controlPlaneDataDir") != str(data_directory()):
         raise RuntimeError(f"Project already uses {existing.get('controlPlaneDataDir')}. Set ATSYS_DATA_DIR to that directory to keep the existing attachment.")
-    integration = install_integration(project)
+    integration = install_integration(project, provider=options.provider)
     if not existing:
         _private_json(path, {"schemaVersion": 1, "root": str(project), "controlPlaneDataDir": str(data_directory()), "preserveSource": True}, replace=False)
-    result = {"project": str(project), **integration, "dataDirectory": str(data_directory()), "codexInstalled": bool(shutil.which("codex")), "doctor": json.loads(pilot.stdout)}
+    result = {"project": str(project), **integration, "dataDirectory": str(data_directory()), "codexInstalled": bool(shutil.which("codex")), "provider": options.provider, "providerInstalled": bool(shutil.which(options.provider)), "doctor": json.loads(pilot.stdout)}
     if not options.no_service:
         action = "install" if sys.platform == "darwin" else "start"
         service = backend(["service", action], capture=True)
@@ -214,7 +222,7 @@ def initialize(args: list[str]) -> int:
             result["serviceNote"] = "Detached watchdog started. Configure your Linux service manager for restart protection."
     if not options.no_dashboard:
         result["dashboard"] = dashboard(open_browser=options.open)
-    result["next"] = "Open or reopen Codex in this repository and say: $atsys <your objective>"
+    result["next"] = f"Open or reopen {options.provider} in this repository and say: {integration['invoke']}"
     print(json.dumps(result, indent=2))
     return 0
 
@@ -225,13 +233,19 @@ def task_template(args: list[str]) -> int:
     parser.add_argument("--name", default="Coding task")
     parser.add_argument("--project", type=Path, default=Path.cwd())
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--worker", "--provider", choices=("codex", "copilot", "claude"), default="codex")
+    parser.add_argument("--supervisor-provider", choices=("codex", "copilot", "claude"))
+    parser.add_argument("--repair-provider", choices=("codex", "copilot", "claude"))
+    parser.add_argument("--trusted-local-execution", action="store_true", help="Authorize Copilot/Claude CLI tools as your local user; not a Codex sandbox")
     parser.add_argument("--allow-repair", action="store_true")
     parser.add_argument("--network-access", action="store_true", help="Authorize network access in the worker/repair sandbox")
     parser.add_argument("--no-goal-monitoring", action="store_true", help="Explicitly opt out of default Codex milestone monitoring")
     parser.add_argument("--force", action="store_true")
     options = parser.parse_args(args)
     config = json.loads((RESOURCES / "task-defaults.json").read_text())
-    config.update(name=options.name, objective=options.objective, cwd=str(options.project.resolve(strict=True)), worker="codex", validator="command", validationArgv=[], activityTimeoutSeconds=600, allowRepair=options.allow_repair, networkAccess=options.network_access, goalMonitoring=not options.no_goal_monitoring)
+    config.update(name=options.name, objective=options.objective, cwd=str(options.project.resolve(strict=True)), worker=options.worker, trustedLocalExecution=options.trusted_local_execution, validator="command", validationArgv=[], activityTimeoutSeconds=600, allowRepair=options.allow_repair, networkAccess=options.network_access, goalMonitoring=not options.no_goal_monitoring)
+    if options.supervisor_provider: config["supervisorProvider"] = options.supervisor_provider
+    if options.repair_provider: config["repairProvider"] = options.repair_provider
     config["goalContract"] = {
         "version": 1, "successCriteria": [], "deliverables": [], "constraints": [],
         "assumptions": [], "unresolvedDecisions": ["Define material goal choices and acceptance evidence before launch"],
@@ -252,13 +266,13 @@ def main(argv: list[str] | None = None) -> int:
         if not args or args[0] in ("help", "--help", "-h"):
             print(f"""AtSys {__version__} — installed coding-task supervision
 
-  atsys init [--project /repo]           Attach, install Codex skill and start services
-  atsys integrate [--project /repo]      Install just the repository Codex skill
+  atsys init [--project /repo]           Attach agent skill (--provider codex|copilot|claude) and start services
+  atsys integrate [--project /repo]      Install a repository agent skill (--provider codex|copilot|claude)
   atsys integrate --remove              Remove the unmodified managed skill
   atsys ui [--no-open] [--port 4310]     Start/open bundled dashboard
   atsys task template --objective ... [--output .atsys/tasks/task.json]
   atsys task schema                     Print installed task JSON schema
-  atsys hooks events                    List task and native Codex callback events
+  atsys hooks events                    List task and portable native agent callback events
   atsys hooks run file.py:hooks         Run a project callback (JSON stdin/stdout)
   atsys hooks codex-install --config task.json
                                        Preserve existing hooks; install native bridge for review
@@ -293,9 +307,10 @@ Persistent data: {data_directory()}
         if args[0] == "integrate":
             parser = argparse.ArgumentParser(prog="atsys integrate")
             parser.add_argument("--project", type=Path, default=Path.cwd())
+            parser.add_argument("--provider", choices=("codex", "copilot", "claude"), default="codex")
             parser.add_argument("--remove", action="store_true")
             options = parser.parse_args(args[1:])
-            print(json.dumps(install_integration(options.project, remove=options.remove), indent=2))
+            print(json.dumps(install_integration(options.project, remove=options.remove, provider=options.provider), indent=2))
             return 0
         if args[0] in ("ui", "dashboard"):
             parser = argparse.ArgumentParser(prog="atsys ui")
@@ -309,6 +324,9 @@ Persistent data: {data_directory()}
         if args[:2] == ["task", "schema"]:
             print((RESOURCES / "task-schema.json").read_text(), end="")
             return 0
+        if args[0] == 'providers' and '--json' not in args:
+            from .terminal import show_providers
+            return show_providers(backend)
         if args[0] == 'monitor':
             args = ['task','monitor',*args[1:]]
         if args[:2] == ['watch','task']:

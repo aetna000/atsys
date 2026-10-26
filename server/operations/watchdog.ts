@@ -1,3 +1,4 @@
+import { providerFor } from '../../shared/providers.js';
 import { spawn } from 'node:child_process';
 import { runtimeArgs } from '../runtime.js';
 import type { Attempt, ManagedTask, OperationsState } from '../../shared/operations.js';
@@ -33,6 +34,7 @@ export class Watchdog {
         pid: process.pid,
         heartbeatAt: stamp(),
         startedAt: stamp(),
+        providerProtocol: 1,
         hookProtocol: 1,
         pauseProtocol: 1,
       };
@@ -44,6 +46,7 @@ export class Watchdog {
     const launches = this.store.update((s) => {
       if (s.daemon?.owner !== this.owner) return [] as { taskId: string; attemptId: string }[];
       s.daemon.heartbeatAt = stamp();
+      s.daemon.providerProtocol = 1;
       s.daemon.hookProtocol = 1;
       s.daemon.pauseProtocol = 1;
       const launches: { taskId: string; attemptId: string }[] = [];
@@ -376,7 +379,7 @@ export class Watchdog {
       t,
       'policy',
       'retry.authorized',
-      `Retry using configured ${t.config.worker === 'codex' ? 'Codex objective and approved recovery guidance' : t.config.resumeArgv.length ? 'checkpoint resume argv' : 'original command'}. ${reason}`,
+      `Retry using configured ${t.config.worker !== 'command' ? `${t.config.worker} objective and approved recovery guidance` : t.config.resumeArgv.length ? 'checkpoint resume argv' : 'original command'}. ${reason}`,
     );
     enqueue(s, t, 'Recovery', `Retry scheduled: ${reason}`, `${t.attempts.at(-1)!.id}:retry`);
   }
@@ -400,6 +403,7 @@ export class Watchdog {
     config = t.config,
   ) {
     const a: Attempt = {
+      provider: providerFor(config, phase),
       pauseProtocol: 1,
       id: uid('attempt'),
       phase,

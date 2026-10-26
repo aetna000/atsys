@@ -5,6 +5,7 @@ import { taskDefaults, type TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
 import { goalContractSchema, guardGoal } from './goal.js';
 import { hookSchema } from './hooks.js';
+import { agentProviders, providerFor, providerCapabilities } from '../../shared/providers.js';
 const effort = z.enum(['low', 'medium', 'high', 'xhigh']);
 const arg = z
   .string()
@@ -18,7 +19,12 @@ export const configSchema = z
     name: z.string().trim().min(1).max(120),
     objective: z.string().trim().min(3).max(6000),
     cwd: z.string().min(1).max(2000),
-    worker: z.enum(['command', 'codex']),
+    worker: z.enum(['command', ...agentProviders]),
+    supervisorProvider: z.enum(agentProviders).optional(),
+    repairProvider: z.enum(agentProviders).optional(),
+    repairModel: z.string().max(100).optional(),
+    repairEffort: effort.optional(),
+    trustedLocalExecution: z.boolean().optional(),
     argv: z.array(arg).max(100),
     resumeArgv: z.array(arg).max(100),
     model: z.string().max(100),
@@ -55,6 +61,46 @@ export function inside(root: string, path: string) {
 }
 export function validateConfig(input: unknown): TaskConfig {
   const c = configSchema.parse(input);
+  for (const phase of ['worker', 'supervisor', 'repair'] as const) {
+    if (phase !== 'worker' && c.recovery !== 'supervised') continue;
+    if (phase === 'repair' && !c.allowRepair) continue;
+    const provider = providerFor(c, phase);
+    if (provider && provider !== 'codex' && phase !== 'supervisor' && !c.trustedLocalExecution)
+      throw new DomainError(
+        `${provider} ${phase} requires trustedLocalExecution=true: native CLI shell tools execute as your local user, without Codex sandbox guarantees.`,
+        400,
+      );
+    if (!provider) continue;
+    for (const hook of c.hooks.filter((h) => !h.phases.length || h.phases.includes(phase))) {
+      for (const event of hook.events) {
+        if (event.startsWith('codex_') && provider !== 'codex')
+          throw new DomainError(
+            `Hook ${hook.id}: use portable agent_* events for ${provider ?? 'command'} ${phase}`,
+            400,
+          );
+        if (
+          event.startsWith('agent_') &&
+          (!provider ||
+            !providerCapabilities
+              .find((p) => p.id === provider)!
+              .nativeEvents.some((supported) => supported === event))
+        )
+          throw new DomainError(
+            `Hook ${hook.id}: ${event} is unavailable for ${provider ?? 'command'} ${phase}`,
+            400,
+          );
+        if (
+          provider === 'copilot' &&
+          hook.failurePolicy === 'fail' &&
+          ['agent_before_model_turn', 'agent_session_start', 'agent_pre_compact'].includes(event)
+        )
+          throw new DomainError(
+            `Copilot ${event} is observation-only; choose failurePolicy=continue or a lifecycle gate`,
+            400,
+          );
+      }
+    }
+  }
   if (new Set(c.hooks.map((h) => h.id)).size !== c.hooks.length)
     throw new DomainError('Hook IDs must be unique within a task', 400);
   try {

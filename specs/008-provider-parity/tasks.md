@@ -1,0 +1,8 @@
+- [x] Provider registry, role configuration and shared prompts
+- [x] CLI invocations, strict results, doctor and readable output
+- [x] Portable native hooks and per-attempt configuration
+- [x] Provider selections and policy/capabilities in web and terminal
+- [x] Python templates, installed skills and safe integration lifecycle
+- [x] End-to-end fixture provider execution, recovery and compatibility tests
+- [x] Desktop/mobile, installed-wheel and required quality gates
+- [x] Documentation and final capability/verification report

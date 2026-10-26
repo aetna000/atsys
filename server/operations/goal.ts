@@ -48,7 +48,7 @@ export function guardGoal(c: TaskConfig) {
   if (!g.observers.some((o) => o.signal === 'validator'))
     throw new DomainError('Goal plan must explain its declared validator', 400);
   for (const o of g.observers) {
-    if (o.signal === 'progress' && !c.progressFile && !(c.worker === 'codex' && c.goalMonitoring))
+    if (o.signal === 'progress' && !c.progressFile && !(c.worker !== 'command' && c.goalMonitoring))
       throw new DomainError('Progress observer requires a progress source', 400);
     if (o.signal === 'activity' && !c.activityTimeoutSeconds)
       throw new DomainError('Activity observer requires an inactivity window', 400);

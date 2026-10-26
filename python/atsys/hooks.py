@@ -16,6 +16,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 EVENTS = (
+    "agent_pre_tool",
+    "agent_post_tool",
+    "agent_before_model_turn",
+    "agent_after_model_turn",
+    "agent_session_start",
+    "agent_pre_compact",
+    "agent_post_compact",
     "before_run",
     "after_run",
     "on_run_error",

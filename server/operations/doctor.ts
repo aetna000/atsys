@@ -14,6 +14,7 @@ import {
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import type { TaskConfig } from '../../shared/operations.js';
 import { inside } from './config.js';
+import { providerFor } from '../../shared/providers.js';
 
 export interface SetupReport {
   ready: boolean;
@@ -91,12 +92,15 @@ export function setupDoctor(cwd: string, config?: TaskConfig): SetupReport {
   });
   if (config) {
     const required = [
-      { name: 'worker executable', command: config.worker === 'codex' ? 'codex' : config.argv[0] },
+      { name: 'worker executable', command: providerFor(config, 'worker') ?? config.argv[0] },
       ...(config.validator === 'command'
         ? [{ name: 'validator executable', command: config.validationArgv[0] }]
         : []),
       ...(config.recovery === 'supervised'
-        ? [{ name: 'supervisor executable', command: 'codex' }]
+        ? [{ name: 'supervisor executable', command: providerFor(config, 'supervisor')! }]
+        : []),
+      ...(config.recovery === 'supervised' && config.allowRepair
+        ? [{ name: 'repair executable', command: providerFor(config, 'repair')! }]
         : []),
       ...(config.worker === 'command' && config.resumeArgv.length
         ? [{ name: 'resume executable', command: config.resumeArgv[0] }]

@@ -1,3 +1,9 @@
+import {
+  agentProviders,
+  providerFor,
+  providerLabels,
+  providerCapabilities,
+} from '../../shared/providers';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -270,7 +276,7 @@ export function Tasks({
               icon={Terminal}
               label="01 · WORKER"
               title="Runs your task"
-              detail="Explicit command or native Codex exec"
+              detail="Codex, Copilot, Claude or an explicit command"
             />
             <Wire
               icon={Activity}
@@ -282,7 +288,7 @@ export function Tasks({
               icon={Bot}
               label="03 · SUPERVISOR"
               title="Diagnoses exceptions"
-              detail="Codex proposal → deterministic policy"
+              detail="Selected provider proposal → deterministic policy"
             />
             <Wire
               icon={Bell}
@@ -666,12 +672,14 @@ function TaskDetail({
           icon={Terminal}
           label="WORKER"
           title={
-            t.config.worker === 'codex'
-              ? t.config.model || 'Codex · configured default'
+            t.config.worker !== 'command'
+              ? `${providerLabels[t.config.worker as 'codex' | 'copilot' | 'claude']} · ${t.config.model || 'configured default'}`
               : 'Local command'
           }
           detail={
-            t.config.worker === 'codex' ? `${t.config.reasoningEffort} reasoning` : t.config.argv[0]
+            t.config.worker !== 'command'
+              ? `${t.config.reasoningEffort} reasoning`
+              : t.config.argv[0]
           }
         />
         <Wire
@@ -689,7 +697,7 @@ function TaskDetail({
           label="SUPERVISOR"
           title={
             t.config.recovery === 'supervised'
-              ? t.config.supervisorModel || 'Codex · configured default'
+              ? `${providerLabels[providerFor(t.config, 'supervisor')!]} · ${t.config.supervisorModel || 'configured default'}`
               : t.config.recovery === 'restart'
                 ? 'Deterministic restart'
                 : 'Notify only'
@@ -740,7 +748,7 @@ function TaskDetail({
                   </p>
                   {run.context.native && (
                     <p>
-                      Codex · {run.context.native.event} ·{' '}
+                      {providerLabels[run.context.native.provider]} · {run.context.native.event} ·{' '}
                       {run.context.native.toolName ?? 'turn/session'} ·{' '}
                       {run.context.native.model ?? 'model not reported'}
                     </p>
@@ -765,8 +773,8 @@ function TaskDetail({
                 <dd className="mono">{t.config.cwd}</dd>
                 <dt>Execution arguments</dt>
                 <dd className="mono">
-                  {t.config.worker === 'codex'
-                    ? 'Codex objective-driven execution (argv not required)'
+                  {t.config.worker !== 'command'
+                    ? `${t.config.worker} objective-driven execution (argv not required)`
                     : JSON.stringify(t.config.argv)}
                 </dd>
                 <dt>Observer check detail</dt>
@@ -780,7 +788,9 @@ function TaskDetail({
                     ? 'Local commands use local-user permissions'
                     : t.config.networkAccess
                       ? 'Authorized for worker and repair'
-                      : 'Disabled in Codex sandbox'}
+                      : t.config.worker === 'codex'
+                        ? 'Disabled in Codex sandbox'
+                        : 'Native local-tool permissions; not an OS network boundary'}
                 </dd>
                 <dt>Execution plan</dt>
                 <dd>{t.config.plan || 'Worker follows the task objective'}</dd>
@@ -792,8 +802,8 @@ function TaskDetail({
                 </dd>
                 <dt>Resume arguments</dt>
                 <dd className="mono">
-                  {t.config.worker === 'codex'
-                    ? 'Codex objective and recovery instructions'
+                  {t.config.worker !== 'command'
+                    ? `${t.config.worker} objective and recovery instructions`
                     : t.config.resumeArgv.length
                       ? JSON.stringify(t.config.resumeArgv)
                       : 'Original command on retry'}
@@ -1016,7 +1026,7 @@ function TaskForm({
       fullWidth
       label={label}
       type={type}
-      value={c[key]}
+      value={c[key] ?? ''}
       helperText={help}
       onChange={(e) =>
         setC({ ...c, [key]: type === 'number' ? Number(e.target.value) : e.target.value })
@@ -1029,8 +1039,8 @@ function TaskForm({
       select
       fullWidth
       label={label}
-      value={c[key]}
-      onChange={(e) => setC({ ...c, [key]: e.target.value })}
+      value={c[key] ?? ''}
+      onChange={(e) => setC({ ...c, [key]: e.target.value || undefined })}
     >
       {values.map(([v, label]) => (
         <MenuItem value={v} key={v}>
@@ -1072,7 +1082,29 @@ function TaskForm({
           {select('worker', 'Worker', [
             ['command', 'Local command'],
             ['codex', 'Codex coding agent'],
+            ['copilot', 'GitHub Copilot coding agent'],
+            ['claude', 'Claude Code coding agent'],
           ])}
+          {(c.worker === 'copilot' ||
+            c.worker === 'claude' ||
+            (c.allowRepair && providerFor(c, 'repair') !== 'codex')) && (
+            <FormControlLabel
+              className="ops-full"
+              control={
+                <Switch
+                  checked={!!c.trustedLocalExecution}
+                  onChange={(_, v) => setC({ ...c, trustedLocalExecution: v })}
+                />
+              }
+              label="Authorize native CLI tools as my local user (Copilot/Claude; no Codex sandbox guarantee)"
+            />
+          )}
+          {c.worker !== 'command' && (
+            <Alert className="ops-full" severity="info">
+              {providerCapabilities.find((p) => p.id === c.worker)?.executionIsolation}.{' '}
+              {providerCapabilities.find((p) => p.id === c.worker)?.limitations.join('; ')}
+            </Alert>
+          )}
           {select('validator', 'Completion validator', [
             ['command', 'Independent validation command'],
             ['exit-code', 'Successful process exit'],
@@ -1090,7 +1122,12 @@ function TaskForm({
             />
           ) : (
             <>
-              {field('model', 'Worker model', 'text', 'Blank uses your Codex configuration')}
+              {field(
+                'model',
+                'Worker model',
+                'text',
+                'Blank uses the selected provider configuration',
+              )}
               {select('reasoningEffort', 'Worker reasoning effort', efforts)}
             </>
           )}
@@ -1133,7 +1170,7 @@ function TaskForm({
           </AccordionSummary>
           <AccordionDetails>
             <div className="ops-form-grid">
-              {c.worker === 'codex' && (
+              {c.worker !== 'command' && (
                 <FormControlLabel
                   className="ops-full"
                   control={
@@ -1142,7 +1179,7 @@ function TaskForm({
                       onChange={(_, v) => setC({ ...c, goalMonitoring: v })}
                     />
                   }
-                  label="Default goal-progress monitoring for new Codex tasks"
+                  label="Default goal-progress monitoring for new coding-agent tasks"
                 />
               )}
               {field(
@@ -1166,7 +1203,7 @@ function TaskForm({
               {field('heartbeatTimeoutSeconds', 'Runner heartbeat timeout (seconds)', 'number')}
               {field('timeoutSeconds', 'Worker attempt timeout (seconds)', 'number')}
               {field('taskTimeoutSeconds', 'Total task lifetime (seconds)', 'number')}
-              {(c.worker === 'codex' || (c.recovery === 'supervised' && c.allowRepair)) && (
+              {(c.worker !== 'command' || (c.recovery === 'supervised' && c.allowRepair)) && (
                 <FormControlLabel
                   className="ops-full"
                   control={
@@ -1175,7 +1212,7 @@ function TaskForm({
                       onChange={(_, v) => setC({ ...c, networkAccess: v })}
                     />
                   }
-                  label="Authorize network access for Codex worker and bounded repair"
+                  label="Authorize network tools (Codex sandbox egress; other CLIs use native local-tool policy)"
                 />
               )}
             </div>
@@ -1188,7 +1225,7 @@ function TaskForm({
           <AccordionDetails>
             <div className="ops-form-grid">
               {select('recovery', 'Exception policy', [
-                ['supervised', 'Ask Codex supervisor'],
+                ['supervised', 'Ask selected agent supervisor'],
                 ['restart', 'Restart declared command'],
                 ['notify', 'Stop and notify me'],
               ])}
@@ -1207,11 +1244,15 @@ function TaskForm({
               )}
               {c.recovery === 'supervised' && (
                 <>
+                  {select('supervisorProvider', 'Supervisor provider', [
+                    ['', 'Inherit coding worker (Codex for commands)'],
+                    ...agentProviders.map((p) => [p, providerLabels[p]] as [string, string]),
+                  ])}
                   {field(
                     'supervisorModel',
                     'Supervisor model',
                     'text',
-                    'Blank uses your Codex configuration',
+                    'Blank uses the selected provider configuration',
                   )}
                   {select('supervisorEffort', 'Supervisor reasoning effort', efforts)}
                   {field('supervisorTimeoutSeconds', 'Supervisor timeout (seconds)', 'number')}
@@ -1224,10 +1265,27 @@ function TaskForm({
                         onChange={(_, v) => setC({ ...c, allowRepair: v })}
                       />
                     }
-                    label="Authorize a bounded Codex repair in this workspace before retry"
+                    label="Authorize a bounded repair in this workspace before retry"
                   />
-                  {c.allowRepair &&
-                    field('repairTimeoutSeconds', 'Repair timeout (seconds)', 'number')}
+                  {c.allowRepair && (
+                    <>
+                      {select('repairProvider', 'Repair provider', [
+                        ['', 'Inherit supervisor provider'],
+                        ...agentProviders.map((p) => [p, providerLabels[p]] as [string, string]),
+                      ])}
+                      {field(
+                        'repairModel',
+                        'Repair model',
+                        'text',
+                        'Blank inherits supervisor model',
+                      )}
+                      {select('repairEffort', 'Repair reasoning effort', [
+                        ['', 'Inherit supervisor effort'],
+                        ...efforts,
+                      ])}
+                      {field('repairTimeoutSeconds', 'Repair timeout (seconds)', 'number')}
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1245,14 +1303,14 @@ function TaskForm({
               label="Lifecycle hooks (JSON array)"
               value={hooks}
               onChange={(e) => setHooks(e.target.value)}
-              helperText="Optional callbacks with id, events and argv. Before-run hooks gate execution; on_tick can report progress. Native Codex hooks require its trust review."
+              helperText="Optional callbacks with id, events and argv. Before-run hooks gate execution; on_tick can report progress. Portable agent_* native hooks use the selected provider; legacy codex_* hooks remain supported. Provider hook limitations are enforced."
             />
           </AccordionDetails>
         </Accordion>
         <Alert severity="info" sx={{ mt: 2 }}>
-          Commands execute as your local user. Diagnosis uses a read-only Codex sandbox. Enabled
-          repair uses workspace-write. Active attempts keep their saved configuration; edits affect
-          future attempts and the total task lifetime.
+          Commands and authorized Copilot/Claude tools execute as your local user. Diagnosis is
+          restricted to read/search; Codex uses its native sandbox. Active attempts keep their saved
+          configuration; edits affect future attempts and the total task lifetime.
         </Alert>
       </DialogContent>
       <DialogActions>

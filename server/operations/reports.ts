@@ -1,3 +1,4 @@
+import { providerFor } from '../../shared/providers.js';
 import { createHash } from 'node:crypto';
 import {
   constants,
@@ -204,6 +205,15 @@ export function persistReport(
     `Workflow acceptance: ${workflowAccepted ? 'accepted by declared validator' : 'not established'}. Domain success is not inferred from task status.`,
     `Success criteria: ${config.goalContract?.successCriteria.map(clean).join('; ') || 'Legacy contract: see original objective and declared validator.'}`,
     `Constraints: ${config.goalContract?.constraints.map(clean).join('; ') || 'See original task configuration.'}`,
+    `Coding providers: worker ${config.worker}; supervisor ${providerFor(config, 'supervisor')}; repair ${providerFor(config, 'repair')}.`,
+    ...(['worker', 'repair'].some((phase) => {
+      const p = providerFor(config, phase as 'worker' | 'repair');
+      return p && p !== 'codex';
+    })
+      ? [
+          'Copilot/Claude shell tools use authorized local-user execution; native permissions are not Codex OS sandbox containment.',
+        ]
+      : []),
     `Recovery limits: ${config.maxRetries} worker retries; ${config.maxSupervisorCalls} supervisor calls; ${config.timeoutSeconds}s attempt / ${config.taskTimeoutSeconds}s task; repair ${config.allowRepair ? 'authorized within scope' : 'not authorized'}.`,
     `Recovery scope: ${clean(config.goalContract?.recoveryScope ?? 'Original local-operator policy')}`,
     '## Work and attempts',
@@ -211,7 +221,7 @@ export function persistReport(
       .slice(-100)
       .map(
         (a) =>
-          `${a.id} · ${a.phase} · ${a.status} · ${a.startedAt} — ${a.endedAt ?? 'end unknown'}${a.failure ? ' · ' + clean(a.failure) : ''}${a.repairResult ? ' · Repair: ' + clean(a.repairResult.summary) : ''}`,
+          `${a.id} · ${a.phase} · ${a.status} · provider=${a.provider ?? providerFor(a.config, a.phase) ?? 'command'} · ${a.startedAt} — ${a.endedAt ?? 'end unknown'}${a.failure ? ' · ' + clean(a.failure) : ''}${a.repairResult ? ' · Repair: ' + clean(a.repairResult.summary) : ''}`,
       ),
     t.attempts.length > 100
       ? 'Earlier attempts omitted from readable report; retained in task storage.'

@@ -1,4 +1,5 @@
 import type { GoalContract } from '../server/operations/goal.js';
+import type { AgentProvider } from './providers.js';
 export interface Progress {
   completed: number;
   total: number;
@@ -11,6 +12,13 @@ export interface ProgressReporter {
   reference: string;
 }
 export const hookEvents = [
+  'agent_pre_tool',
+  'agent_post_tool',
+  'agent_before_model_turn',
+  'agent_after_model_turn',
+  'agent_session_start',
+  'agent_pre_compact',
+  'agent_post_compact',
   'before_run',
   'after_run',
   'on_run_error',
@@ -71,7 +79,7 @@ export interface HookContext {
     output: string;
   } | null;
   native?: {
-    provider: 'codex';
+    provider: AgentProvider;
     event: string;
     model?: string;
     sessionId?: string;
@@ -111,7 +119,12 @@ export interface TaskConfig {
   name: string;
   objective: string;
   cwd: string;
-  worker: 'command' | 'codex';
+  worker: 'command' | AgentProvider;
+  supervisorProvider?: AgentProvider;
+  repairProvider?: AgentProvider;
+  repairModel?: string;
+  repairEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  trustedLocalExecution?: boolean;
   argv: string[];
   resumeArgv: string[];
   model: string;
@@ -161,6 +174,7 @@ export interface TaskEvent {
   message: string;
 }
 export interface Attempt {
+  provider?: AgentProvider;
   id: string;
   phase: 'worker' | 'supervisor' | 'repair' | 'validator';
   status: 'starting' | 'running' | 'succeeded' | 'failed' | 'lost' | 'stopped';
@@ -261,6 +275,7 @@ export interface OperationsState {
     pid: number;
     heartbeatAt: string;
     startedAt: string;
+    providerProtocol?: 1;
     hookProtocol?: 1;
     pauseProtocol?: 1;
   } | null;

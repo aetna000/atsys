@@ -174,8 +174,42 @@
       "type": "string",
       "enum": [
         "command",
-        "codex"
+        "codex",
+        "copilot",
+        "claude"
       ]
+    },
+    "supervisorProvider": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "copilot",
+        "claude"
+      ]
+    },
+    "repairProvider": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "copilot",
+        "claude"
+      ]
+    },
+    "repairModel": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "repairEffort": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "trustedLocalExecution": {
+      "type": "boolean"
     },
     "argv": {
       "maxItems": 100,
@@ -343,11 +377,18 @@
           },
           "events": {
             "minItems": 1,
-            "maxItems": 17,
+            "maxItems": 24,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
+                "agent_pre_tool",
+                "agent_post_tool",
+                "agent_before_model_turn",
+                "agent_after_model_turn",
+                "agent_session_start",
+                "agent_pre_compact",
+                "agent_post_compact",
                 "before_run",
                 "after_run",
                 "on_run_error",

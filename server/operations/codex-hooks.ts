@@ -1,3 +1,4 @@
+import { portableNativeEvents } from '../../shared/providers.js';
 import { runtimeArgs } from '../runtime.js';
 import type { HookEvent, TaskConfig } from '../../shared/operations.js';
 export const nativeEvents: Record<string, HookEvent> = {
@@ -11,7 +12,9 @@ export const nativeEvents: Record<string, HookEvent> = {
 };
 const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
 export function codexHookConfig(config: Pick<TaskConfig, 'hooks'>) {
-  const nativeHooks = config.hooks.filter((h) => h.events.some((e) => e.startsWith('codex_')));
+  const nativeHooks = config.hooks.filter((h) =>
+    h.events.some((e) => e.startsWith('codex_') || e.startsWith('agent_')),
+  );
   const hooks: Record<
     string,
     {
@@ -36,7 +39,11 @@ export function codexHookConfig(config: Pick<TaskConfig, 'hooks'>) {
     ];
   for (const [name, event] of Object.entries(nativeEvents))
     for (const hook of nativeHooks) {
-      if (!hook.events.includes(event)) continue;
+      if (
+        !hook.events.includes(event) &&
+        !hook.events.includes(portableNativeEvents[name as keyof typeof portableNativeEvents])
+      )
+        continue;
       (hooks[name] ??= []).push({
         ...(name === 'PreToolUse' || name === 'PostToolUse' ? { matcher: hook.matcher } : {}),
         hooks: [

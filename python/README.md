@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.3.0b3
+pip install --upgrade atsys==0.3.0b4
 cd /path/to/your/project
 atsys init
 ```
@@ -61,3 +61,14 @@ does not mean every domain item passed. Reports are local and need no extra mode
 call. Existing direct configurations remain compatible; new skill intake clarifies
 material unresolved decisions before launch. See the repository's
 `docs/releases/v0.3.0b3.md` and `docs/GOAL-WORKFLOW.md` for upgrade and limits.
+
+
+The 0.3.0b4 beta adds GitHub Copilot CLI and Claude Code workers, supervisors and
+bounded repairs alongside Codex. Run `atsys providers`, then
+`atsys init --provider copilot` or `atsys init --provider claude` to install that
+provider's project skill. Native CLIs and their existing logins are prerequisites.
+Copilot/Claude worker and repair tasks require explicit `trustedLocalExecution`
+permission; their local shell tools do not have Codex's OS sandbox guarantee.
+Native callbacks have provider-specific event limits. See `docs/PROVIDERS.md` and
+`docs/releases/v0.3.0b4.md`. Restart an owned idle watchdog with the upgraded
+package before submitting new provider tasks; do not replace active runners.

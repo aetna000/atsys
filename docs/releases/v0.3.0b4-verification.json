@@ -1,0 +1,137 @@
+{
+  "verifiedAt": "2026-10-26T10:05:57.570575+00:00",
+  "candidate": "0.3.0b4",
+  "runtime": "Local provider-parity candidate; real worker runs used development 0.3.0b3 wheel before release version bump",
+  "checks": {
+    "backend": 99,
+    "browserDesktopMobile": 20,
+    "installedWheel": {
+      "installation": 8,
+      "hooksSDK": 6,
+      "terminal": 6,
+      "providerOnboardingAndEnvironment": 4,
+      "optionalAtBot": 2
+    },
+    "productionRuntimeBuild": "passed",
+    "format": "passed",
+    "wheelAndSdistMetadata": "passed"
+  },
+  "liveAcceptance": [
+    {
+      "provider": "codex",
+      "taskId": "task-68a3ec3d-87a3-440a-91a4-b3231561edbf",
+      "status": "completed",
+      "independentValidation": {
+        "passed": true,
+        "detail": "Independent validation command exited zero.",
+        "artifacts": [
+          {
+            "path": "slugify.py",
+            "digest": "591048679c50b8a8dbe73327b373e282aaffac47383ebf5e7812d1674a32a133"
+          },
+          {
+            "path": "README.md",
+            "digest": "a93c6be3e29751bd700625639ff4722cd2d68b44912328209c6d636157bbe576"
+          },
+          {
+            "path": "validation.json",
+            "digest": "1f3b91deb2c82eb26e30896e716cf029a371d92be8454c3e90059c38cc4052df"
+          },
+          {
+            "path": "outcome.json",
+            "digest": "e633b0d4da95cde7e2370c0880c987754db3e1b5266251aa739af91074e5fc1c"
+          }
+        ]
+      },
+      "hooks": {
+        "total": 2,
+        "succeeded": 2
+      },
+      "reportedProgress": {
+        "completed": 3,
+        "total": 3,
+        "checkpoint": "Required deliverables verified and bounded outcome.json written; independent acceptance remains with AtSys",
+        "milestones": [
+          "Inspect task contract",
+          "Implement and check slugify",
+          "Prepare deliverables"
+        ],
+        "planSource": "Live provider parity acceptance plan, 26 October 2026"
+      },
+      "nativeHooksConnected": false
+    },
+    {
+      "provider": "claude",
+      "taskId": "task-57b6c0d8-5289-496f-9303-b8a03af7425d",
+      "status": "completed",
+      "independentValidation": {
+        "passed": true,
+        "detail": "Independent validation command exited zero.",
+        "artifacts": [
+          {
+            "path": "slugify.py",
+            "digest": "cd07e0c15d03fb77719cc465b5114e972cd08e773c7f1b551734e324a87364ab"
+          },
+          {
+            "path": "README.md",
+            "digest": "9dd8163138b4b95c55f4234fe6be7c157e514ec888aa7b2a8df0a340fca109c1"
+          },
+          {
+            "path": "validation.json",
+            "digest": "1f3b91deb2c82eb26e30896e716cf029a371d92be8454c3e90059c38cc4052df"
+          },
+          {
+            "path": "outcome.json",
+            "digest": "c642b134fad3f80925194babfb8422cfb72cee024cffcdc8c55168987d2a2b7a"
+          }
+        ]
+      },
+      "hooks": {
+        "total": 18,
+        "succeeded": 18
+      },
+      "reportedProgress": null,
+      "nativeHooksConnected": true
+    },
+    {
+      "provider": "copilot",
+      "taskId": "task-06840ccf-43ee-4327-82ce-934c6015c2c5",
+      "status": "completed",
+      "independentValidation": {
+        "passed": true,
+        "detail": "Independent validation command exited zero.",
+        "artifacts": [
+          {
+            "path": "slugify.py",
+            "digest": "d1836eb67cdde80c7cd0721caf81350c8649c765c24b968d97a86a184524cdbd"
+          },
+          {
+            "path": "README.md",
+            "digest": "72c714c1c4ef5a6a1c47013c6cd61eeefbaf3a979b557c29776e30c04001ab56"
+          },
+          {
+            "path": "validation.json",
+            "digest": "1f3b91deb2c82eb26e30896e716cf029a371d92be8454c3e90059c38cc4052df"
+          },
+          {
+            "path": "outcome.json",
+            "digest": "311e439941be1ad0b03775fad672fde7e6896398ce60de36b2611add948c938d"
+          }
+        ]
+      },
+      "hooks": {
+        "total": 17,
+        "succeeded": 17
+      },
+      "reportedProgress": null,
+      "nativeHooksConnected": true
+    }
+  ],
+  "limits": [
+    "Short isolated worker acceptance, not a multi-hour qualification",
+    "Copilot and Claude recovery roles and process controls have fixture coverage, not live recovery coverage from these tasks",
+    "Codex native hook probe failed closed without trust; successful Codex task used lifecycle hooks",
+    "Costs unknown; no notifications sent",
+    "Initial Copilot/Claude planSource paraphrases were rejected; prompt tightened for release"
+  ]
+}

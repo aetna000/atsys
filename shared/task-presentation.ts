@@ -1,3 +1,4 @@
+import { providerFor } from './providers.js';
 import type { ManagedTask } from './operations.js';
 
 export const plainText = (value: string) =>
@@ -78,6 +79,16 @@ export function taskPresentation(task: ManagedTask) {
     paused: !!task.pauseState,
     policy: {
       worker: task.config.worker,
+      supervisorProvider: providerFor(task.config, 'supervisor'),
+      repairProvider: providerFor(task.config, 'repair'),
+      supervisorModel: task.config.supervisorModel || 'configured default',
+      repairModel: task.config.repairModel || task.config.supervisorModel || 'configured default',
+      executionIsolation:
+        task.config.worker === 'codex'
+          ? 'Codex sandbox'
+          : task.config.worker === 'command'
+            ? 'Trusted local command'
+            : 'Authorized native local CLI tools; no Codex sandbox guarantee',
       model: task.config.model || 'configured default',
       recovery: task.config.recovery,
       maxRetries: task.config.maxRetries,
@@ -282,6 +293,7 @@ export function attemptLogEntries(output: string, limit = 100): ActivityEntry[] 
   } catch {
     /* Streamed JSON lines are parsed individually below. */
   }
+  const toolNames = new Map<string, string>();
   for (const [index, raw] of lines.entries()) {
     const line = plainText(raw).trim();
     if (!line) continue;
@@ -291,6 +303,49 @@ export function attemptLogEntries(output: string, limit = 100): ActivityEntry[] 
     };
     try {
       const event = JSON.parse(line);
+      if (event.type === 'assistant.message') {
+        push('message', messageText(event.data?.content ?? ''));
+        continue;
+      }
+      if (event.type === 'assistant.message_delta') continue;
+      if (event.type === 'session.error') {
+        push('error', messageText(event.data?.message ?? event.data?.error ?? 'Provider error'));
+        continue;
+      }
+      if (event.type === 'tool.execution_start' || event.type === 'tool.execution_complete') {
+        const data = event.data ?? {};
+        const name = data.toolName ?? toolNames.get(data.toolCallId) ?? 'tool';
+        if (data.toolCallId && data.toolName) toolNames.set(data.toolCallId, data.toolName);
+        const command = data.arguments?.command ?? data.arguments?.cmd;
+        push(
+          data.success === false ? 'error' : 'tool',
+          `${event.type.endsWith('_start') ? 'Running' : data.success === false ? 'Failed' : 'Finished'}: ${shortText(String(command ?? name), 260)}`,
+        );
+        continue;
+      }
+      if (
+        (event.type === 'assistant' || event.type === 'user') &&
+        Array.isArray(event.message?.content)
+      ) {
+        for (const block of event.message.content) {
+          if (block.type === 'text') push('message', messageText(block.text));
+          if (block.type === 'tool_use') {
+            toolNames.set(block.id, block.name);
+            push('tool', `Running: ${shortText(String(block.input?.command ?? block.name), 260)}`);
+          }
+          if (block.type === 'tool_result')
+            push(
+              block.is_error ? 'error' : 'tool',
+              `${block.is_error ? 'Failed' : 'Finished'}: ${toolNames.get(block.tool_use_id) ?? 'tool'}`,
+            );
+        }
+        continue;
+      }
+      if (event.type === 'result') {
+        if (event.is_error || (event.subtype && event.subtype !== 'success'))
+          push('error', messageText(event.result ?? `Provider result: ${event.subtype}`));
+        continue;
+      }
       const item = event?.item ?? event;
       const type = item?.type;
       if (

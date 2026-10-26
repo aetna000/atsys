@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.3.0b3
+python -m pip install --upgrade atsys==0.3.0b4
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b3 on PyPI](https://pypi.org/project/atsys/0.3.0b3/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b3) and [release notes](docs/releases/v0.3.0b3.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b4 on PyPI](https://pypi.org/project/atsys/0.3.0b4/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b4) and [release notes](docs/releases/v0.3.0b4.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## New in 0.3.0b3
 
@@ -58,15 +58,23 @@ Open **http://127.0.0.1:5173**. For a built application, run `npm run build` the
 
 The 0.3.0b1 beta UI exposes managed tasks and operational service/Telegram settings. Sample fleet, costs, approvals and unavailable companion pages are removed from its navigation and routes. No Docker, Kubernetes, AtMem, or AtFlows is required.
 
+## Coding provider support in 0.3.0b4
+
+The 0.3.0b4 beta adds GitHub Copilot CLI and Claude Code alongside
+Codex for managed workers, supervisors and repairs. Shared goal/progress,
+validation, reports, hooks and process controls apply to all three. Use
+`atsys init --provider copilot` or `--provider claude`;
+see [provider setup and permission differences](docs/PROVIDERS.md).
+
 ## Delegate work
 
 Use **New managed task** to configure:
 
 - Objective, project directory, execution plan and constraints.
-- A Codex coding worker (model and reasoning effort), or explicit command arguments.
+- A Codex, Copilot or Claude coding worker (model and reasoning effort), or explicit command arguments.
 - An independent acceptance command: tests, builds, lint, custom assertions, or any executable check. Required artifact paths are optional and their contents are hashed.
 - Attempt deadlines, total task lifetime, runner heartbeat deadline, output inactivity window, and optional application progress file.
-- Notify-only, bounded restart, or automatic Codex supervision. Optional repair permission launches a separate bounded Codex worker with workspace-write access.
+- Notify-only, bounded restart, or automatic supervision using the selected provider. Optional repair permission launches a separate bounded repair worker with that provider’s documented permissions.
 - Retry delay/limits, supervisor model/effort/call limit/deadline, and repair deadline.
 
 AtSys launches the worker, checks it, and runs the independent validator. Failed execution or validation opens an incident. The supervisor diagnoses read-only and proposes restart, repair, or human escalation. Deterministic policy decides whether the action is permitted. A repair never bypasses the configured acceptance command.

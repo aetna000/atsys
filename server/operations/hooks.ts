@@ -10,6 +10,21 @@ import {
 import { progressSchema } from './progress.js';
 import { redact } from '../control-plane.js';
 
+// Redact individual strings, never a serialized document: redact bounds its
+// output and truncating JSON can prevent real native callbacks from queuing.
+function redactContext(value: unknown): unknown {
+  if (typeof value === 'string') return redact(value);
+  if (Array.isArray(value)) return value.map(redactContext);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        /^(api[_-]?key|token|password|secret)$/i.test(key) ? '[REDACTED]' : redactContext(item),
+      ]),
+    );
+  return value;
+}
+
 export const hookSchema = z
   .object({
     id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
@@ -125,7 +140,7 @@ export function queueHooks(
       event,
       hook: structuredClone(hook),
       attemptId: attempt?.id,
-      context: JSON.parse(redact(JSON.stringify(context))),
+      context: redactContext(context) as HookRun['context'],
       createdAt: now,
       pid: null,
       status: replay || count >= hook.maxInvocations ? 'failed' : 'queued',

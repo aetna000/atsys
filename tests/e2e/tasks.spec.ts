@@ -88,10 +88,12 @@ test('managed coding task has independent validation, editable configuration and
       .click();
     await page.getByRole('button', { name: 'Edit task wiring' }).click();
     await expect(
-      page.getByLabel('Authorize network access for Codex worker and bounded repair'),
+      page.getByLabel(
+        'Authorize network tools (Codex sandbox egress; other CLIs use native local-tool policy)',
+      ),
     ).toHaveCount(0);
     await expect(
-      page.getByLabel('Default goal-progress monitoring for new Codex tasks'),
+      page.getByLabel('Default goal-progress monitoring for new coding-agent tasks'),
     ).toHaveCount(0);
     await page
       .getByRole('combobox', { name: /^Worker (Local command|Codex coding agent)$/ })
@@ -99,7 +101,9 @@ test('managed coding task has independent validation, editable configuration and
     await page.getByRole('option', { name: 'Codex coding agent', exact: true }).click();
     await expect(page.getByLabel('Worker model', { exact: true })).toBeVisible();
     await expect(
-      page.getByLabel('Authorize network access for Codex worker and bounded repair'),
+      page.getByLabel(
+        'Authorize network tools (Codex sandbox egress; other CLIs use native local-tool policy)',
+      ),
     ).toBeVisible();
     await expect(page.getByLabel('Checkpoint resume argv (JSON array)')).toHaveCount(0);
     await page

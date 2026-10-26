@@ -218,15 +218,38 @@ def status_panel(task: dict):
         ),
         ("Heartbeat", age(task.get("heartbeatAt"))),
         ("Observer", task["observerSummary"]),
-        ("Supervisor", task["supervisor"]),
+        (
+            "Supervisor",
+            f"{task.get('policy', {}).get('supervisorProvider', 'codex')} · {task['supervisor']}",
+        ),
+        (
+            "Repair",
+            f"{task.get('policy', {}).get('repairProvider', 'codex')} · {task.get('policy', {}).get('repairModel', 'configured default')}",
+        ),
+        (
+            "Tool policy",
+            task.get("policy", {}).get("executionIsolation", "not recorded"),
+        ),
         (
             "Deadlines",
             f"worker {task.get('policy', {}).get('workerTimeout', '?')}s · task {task.get('policy', {}).get('taskTimeout', '?')}s · heartbeat {task.get('policy', {}).get('heartbeatTimeout', '?')}s",
         ),
         ("Progress", f"stall window {task.get('progressWindow', 0)}s (0 disables it)"),
         ("Acceptance", task["acceptance"]),
-        ("Criteria", "; ".join(task.get("successCriteria", [])) or "Legacy objective and validator"),
-        ("Report", task.get("reportError") or (f"atsys task report {task['id']} · {task['report']['digest']}" if task.get("report") else "Pending / legacy: explicit retrospective generation available")),
+        (
+            "Criteria",
+            "; ".join(task.get("successCriteria", []))
+            or "Legacy objective and validator",
+        ),
+        (
+            "Report",
+            task.get("reportError")
+            or (
+                f"atsys task report {task['id']} · {task['report']['digest']}"
+                if task.get("report")
+                else "Pending / legacy: explicit retrospective generation available"
+            ),
+        ),
         ("Next", task["next"]),
         ("Task", task["id"]),
     ]:
@@ -606,3 +629,28 @@ def choose_task(console: Console, backend) -> str | None:
             elif key == "a":
                 show_all = not show_all
                 selected_id = None
+
+
+def show_providers(backend) -> int:
+    console = Console(highlight=False)
+    values = read_json(["providers", "--json"], backend)
+    table = Table(box=box.SIMPLE, expand=True)
+    for name in ("Provider", "Executable", "Tool policy / limitations"):
+        table.add_column(name, overflow="fold")
+    for row in values:
+        table.add_row(
+            text(row["label"]),
+            text(
+                "Found" if row["executableAvailable"] else "Not found",
+                "green" if row["executableAvailable"] else "yellow",
+            ),
+            text(row["executionIsolation"] + ". " + "; ".join(row["limitations"])),
+        )
+    console.print(table)
+    console.print(
+        text(
+            "Executable presence does not verify login, subscription or model access. Use native CLI login when needed.",
+            "dim",
+        )
+    )
+    return 0

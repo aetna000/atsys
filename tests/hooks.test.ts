@@ -429,3 +429,27 @@ test('oversized native pre-tool payload returns an explicit supported denial', a
     await until(t.id, (task) => task.status === 'completed');
     assert.equal(existsSync(join(root, 'oversize-allowed')), false);
   }));
+
+test('large native callback context stays valid JSON and redacts nested secrets', async () =>
+  fixture(async ({ store, submit }) => {
+    const t = submit({ hooks: [hook(['agent_pre_tool'], handler(`console.log('{}')`))] });
+    store.update((s) => {
+      const task = s.tasks.find((x) => x.id === t.id)!;
+      queueHooks(task, 'agent_pre_tool', undefined, 'large-native', {
+        provider: 'claude',
+        event: 'PreToolUse',
+        toolName: 'Write',
+        toolInput: {
+          content: 'x'.repeat(16000),
+          token: 'private-value',
+          nested: { password: 'hidden' },
+        },
+      });
+    });
+    const context = store.read().tasks.find((x) => x.id === t.id)!.hookRuns![0].context;
+    const serialized = JSON.stringify(context);
+    assert.ok(serialized.length > 8000);
+    assert.equal((context.native!.toolInput as any).content.length, 8000);
+    assert.doesNotMatch(serialized, /private-value|hidden/);
+    assert.match(serialized, /REDACTED/);
+  }));

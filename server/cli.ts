@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { applicationRoot } from './runtime.js';
+import { providerCapabilities, type AgentProvider } from '../shared/providers.js';
+import { executableAvailable } from './operations/doctor.js';
 import { codexHookConfig } from './operations/codex-hooks.js';
 import { execFileSync } from 'node:child_process';
 import { Store } from './store.js';
@@ -49,6 +51,7 @@ try {
   atsys task report [id] [--json] [--generate] [--outcome-file relative.json]
                                              Read/verify or attach a retrospective report
   atsys task logs [id] [--raw]               Readable worker messages (raw is opt-in)
+  atsys providers [--json]                  Provider capabilities and executable checks
   atsys service install | status | start | uninstall
                                              OS watchdog lifecycle (macOS launchd)
 
@@ -70,9 +73,22 @@ Run options:
 
 Without a declared validator a successful exit is incomplete.
 Use task submit for unattended work. Only run --attached uses the legacy terminal-owned executor.
-Codex supervision uses codex exec with read-only diagnosis and optional bounded repair.
+Providers: codex, copilot, claude. Use atsys providers for capabilities.
+Supervision uses the selected read-only coding agent and optional bounded repair.
 Data directory: ${dataDir}
 Start console from the AtSys repository: npm run dev (development) or npm run build && npm start.`);
+  } else if (command === 'providers') {
+    console.log(
+      JSON.stringify(
+        providerCapabilities.map((p) => ({
+          ...p,
+          executableAvailable: executableAvailable(p.id, process.cwd()),
+          authentication: 'not checked',
+        })),
+        null,
+        2,
+      ),
+    );
   } else if (command === 'hooks' && args[1] === 'codex-config') {
     const file = value('--config');
     if (!file) throw new Error('Use hooks codex-config --config task.json');
@@ -243,8 +259,11 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
                 objective:
                   value('--objective') ?? 'Execute the declared command and validate completion.',
                 cwd: value('--project') ?? process.cwd(),
-                worker: (value('--worker') ?? 'command') as 'command' | 'codex',
+                worker: (value('--worker') ?? 'command') as 'command' | AgentProvider,
                 model: value('--model') ?? '',
+                supervisorProvider: value('--supervisor-provider') as AgentProvider | undefined,
+                repairProvider: value('--repair-provider') as AgentProvider | undefined,
+                trustedLocalExecution: optionArgs.includes('--trusted-local-execution'),
                 argv: separator >= 0 ? args.slice(separator + 1) : [],
                 validationArgv: JSON.parse(value('--validation') ?? '[]'),
                 validator: (value('--validator') ??

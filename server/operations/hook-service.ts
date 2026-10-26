@@ -25,6 +25,7 @@ export class HookService {
             (task.stopRequested ||
               taskElapsed(task) > task.config.taskTimeoutSeconds * 1000 ||
               ((run.event.startsWith('codex_') ||
+                run.event.startsWith('agent_') ||
                 run.event === 'on_tick' ||
                 run.event === 'before_run' ||
                 run.event === 'before_validation') &&
@@ -108,7 +109,13 @@ export class HookService {
     if (
       run.status === 'succeeded' &&
       run.result?.progress &&
-      ['on_tick', 'codex_post_tool', 'codex_after_model_turn'].includes(run.event) &&
+      [
+        'on_tick',
+        'codex_post_tool',
+        'codex_after_model_turn',
+        'agent_post_tool',
+        'agent_after_model_turn',
+      ].includes(run.event) &&
       executing(attempt) &&
       task.attempts.at(-1)?.id === attempt!.id
     ) {
@@ -163,7 +170,8 @@ export class HookService {
     // Pre-run gates are handled by the watchdog; terminal callbacks are observations.
     if (
       (run.event !== 'on_tick' &&
-        !(run.event.startsWith('codex_') && run.result?.decision === 'escalate')) ||
+        !(run.event.startsWith('codex_') && run.result?.decision === 'escalate') &&
+        !run.event.startsWith('agent_')) ||
       !executing(attempt) ||
       task.attempts.at(-1)?.id !== attempt!.id
     )

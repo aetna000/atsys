@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.3.0b2
+pip install --upgrade atsys==0.3.0b3
 cd /path/to/your/project
 atsys init
 ```
@@ -53,3 +53,11 @@ AtSys deadlines; remote requests and provider timers may continue. It requires
 the new watchdog and runners. Named milestones explain their source, while
 existing count-only reports stay readable. Only the independent validator decides
 completion. Closing a monitor leaves task execution running.
+
+The 0.3.0b3 beta adds goal contracts, observer rationale, progress across retries
+and automatic durable outcome reports. `atsys task report ID` shows the result,
+acceptance evidence, remaining failures and available costs. Completing a workflow
+does not mean every domain item passed. Reports are local and need no extra model
+call. Existing direct configurations remain compatible; new skill intake clarifies
+material unresolved decisions before launch. See the repository's
+`docs/releases/v0.3.0b3.md` and `docs/GOAL-WORKFLOW.md` for upgrade and limits.

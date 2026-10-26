@@ -67,7 +67,7 @@ test('managed coding task has independent validation, editable configuration and
     await expect(
       page.getByText('Independent validation command exited zero.', { exact: true }).first(),
     ).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText(/feature.txt · SHA-256/)).toBeVisible();
+    await expect(page.getByText(/^feature\.txt · SHA-256/)).toBeVisible();
     await expect(
       page.getByText('build-preflight · before run · succeeded', { exact: true }),
     ).toBeVisible();
@@ -171,7 +171,7 @@ test('activity is readable, newest first and pausing the display never pauses ex
         argv: [
           process.execPath,
           '-e',
-          `const fs=require('fs');console.log(JSON.stringify({message:'First real output'}));setInterval(()=>{if(fs.existsSync('continue.signal')){console.log(JSON.stringify({type:'item.completed',item:{type:'command_execution',command:'acceptance check',status:'completed',exit_code:0}}));console.log(JSON.stringify({message:'Second real output\\nNew activity belongs at the top.'}));process.exit(0)}},100)`,
+          `const fs=require('fs');console.log(JSON.stringify({message:'First real output'}));console.log(JSON.stringify({qualified_recovery_epoch:'/private/test-epoch',tasks:20}));console.log(JSON.stringify({pilot_completed:'morgan/023'}));setInterval(()=>{if(fs.existsSync('continue.signal')){console.log(JSON.stringify({type:'item.completed',item:{type:'command_execution',command:'acceptance check',status:'completed',exit_code:0}}));console.log(JSON.stringify({message:'Second real output\\nNew activity belongs at the top.'}));process.exit(0)}},100)`,
         ],
         validationArgv: [
           process.execPath,
@@ -190,6 +190,9 @@ test('activity is readable, newest first and pausing the display never pauses ex
       'All attempts',
     );
     await expect(activity.getByText('First real output', { exact: true })).toBeVisible();
+    await expect(
+      activity.getByText('Pilot 1/20 completed · morgan/023', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Pause task activity', exact: true }).click();
     writeFileSync(join(cwd, 'continue.signal'), 'resume test workload');
     await expect(
@@ -294,6 +297,93 @@ test('named milestones explain their source and row/detail controls pause, resum
     const stopped = readFileSync(join(cwd, 'ticks'), 'utf8');
     await page.waitForTimeout(400);
     expect(readFileSync(join(cwd, 'ticks'), 'utf8')).toBe(stopped);
+  } finally {
+    if (id) await request.post(`/api/tasks/${id}/stop`, { data: {} });
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('goal workflow shows goal, observed stages and durable partial outcome after reload', async ({
+  page,
+  request,
+}) => {
+  const { taskDefaults } = await import('../../shared/operations');
+  const cwd = mkdtempSync(join(tmpdir(), 'atsys-goal-ui-'));
+  let id: string | undefined;
+  try {
+    const result = await request.post('/api/tasks', {
+      data: {
+        ...taskDefaults,
+        name: 'Goal workflow acceptance',
+        objective: 'Process two items and retain the failed domain result',
+        cwd,
+        plan: 'Process items, independently verify output and deliver report',
+        worker: 'command',
+        recovery: 'notify',
+        progressFile: 'progress.json',
+        outcomeFile: 'outcome.json',
+        outcomeRequired: true,
+        goalContract: {
+          version: 1,
+          successCriteria: ['Report includes the failed item'],
+          deliverables: ['outcome.json'],
+          constraints: ['Local fixture only'],
+          assumptions: [],
+          unresolvedDecisions: [],
+          stages: ['Process items', 'Verify output'],
+          planSource: 'UI fixture goal acceptance plan',
+          observers: [
+            {
+              signal: 'progress',
+              cadenceSeconds: 1,
+              rationale: 'Two actual stages reported by fixture',
+            },
+            { signal: 'validator', cadenceSeconds: 1, rationale: 'Independent JSON content check' },
+          ],
+          recoveryScope: 'No repair required',
+          escalationConditions: ['Validation failure'],
+          budget: 'No API calls; cost unknown',
+        },
+        argv: [
+          process.execPath,
+          '-e',
+          `const fs=require('fs');fs.writeFileSync('progress.json',JSON.stringify({completed:2,total:2,checkpoint:'Both items processed; one domain failure remains'}));fs.writeFileSync('outcome.json',JSON.stringify({version:1,summary:'Processing finished with partial domain results',results:[{name:'Item A',status:'passed',detail:'accepted',evidence:[]},{name:'Item B',status:'failed',detail:'Domain check failed',evidence:[]}],limitations:['One unresolved domain failure']}))`,
+        ],
+        validator: 'command',
+        validationArgv: [
+          process.execPath,
+          '-e',
+          `const r=require('./outcome.json');process.exit(r.results.length===2&&r.results[1].status==='failed'?0:1)`,
+        ],
+        timeoutSeconds: 20,
+      },
+    });
+    expect(result.ok()).toBe(true);
+    id = (await result.json()).id;
+    await page.goto(`/tasks/${id}`);
+    await expect(page.getByRole('heading', { name: 'Goal contract', exact: true })).toBeVisible();
+    await expect(page.getByText('Report includes the failed item', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Two actual stages reported by fixture', { exact: false }),
+    ).toBeVisible();
+    const readable = page.locator('pre').filter({ hasText: '# Task outcome report' });
+    await expect(readable).toContainText('Workflow acceptance: accepted by declared validator', {
+      timeout: 20000,
+    });
+    await expect(readable).toContainText('Item B: failed');
+    await expect(readable).toContainText('worker-reported');
+    await expect(readable).toContainText('Costs: unknown');
+    const receipt = await request.get(`/api/tasks/${id}/report`);
+    expect(receipt.ok()).toBe(true);
+    const digest = (await receipt.json()).digest;
+    await page.reload();
+    await expect(page.getByText(`SHA-256 ${digest}`, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Reported milestone plan' }).locator('li'),
+    ).toHaveCount(2);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
   } finally {
     if (id) await request.post(`/api/tasks/${id}/stop`, { data: {} });
     rmSync(cwd, { recursive: true, force: true });

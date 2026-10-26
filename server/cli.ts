@@ -9,7 +9,8 @@ import { doctor } from './doctor.js';
 import { setupDoctor } from './operations/doctor.js';
 import { executeProcess } from './process-adapter.js';
 import { OperationsStore } from './operations/store.js';
-import { createTask, changeTask } from './operations/tasks.js';
+import { verifyReport } from './operations/reports.js';
+import { createTask, changeTask, generateRetrospectiveReport } from './operations/tasks.js';
 import { withDefaults } from './operations/config.js';
 import { selectTask, watchTask } from './operations/monitor.js';
 import {
@@ -45,6 +46,8 @@ try {
   atsys task list | show <id> | stop <id> | retry <id>
   atsys task status [id] [--json]            Readable current task and next action
   atsys task watch [id] [--once]             Quiet live monitor; Ctrl+C does not stop work
+  atsys task report [id] [--json] [--generate] [--outcome-file relative.json]
+                                             Read/verify or attach a retrospective report
   atsys task logs [id] [--raw]               Readable worker messages (raw is opt-in)
   atsys service install | status | start | uninstall
                                              OS watchdog lifecycle (macOS launchd)
@@ -126,10 +129,36 @@ Start console from the AtSys repository: npm run dev (development) or npm run bu
                 id: t.id,
                 name: t.config.name,
                 status: t.status,
+                goal: t.config.objective,
+                stage: taskPresentation(t).progress?.checkpoint ?? 'Unknown',
+                report: t.reportError ?? t.reports?.at(-1)?.id ?? 'Pending / legacy',
                 attempts: t.attempts.length,
                 updated: t.updatedAt,
               })),
             );
+        } else if (action === 'report') {
+          const task = selectTask(
+            ops.read().tasks,
+            args[2]?.startsWith('--') ? undefined : args[2],
+          );
+          if (value('--outcome-file') && !optionArgs.includes('--generate'))
+            throw new Error('--outcome-file requires --generate');
+          const report = optionArgs.includes('--generate')
+            ? generateRetrospectiveReport(ops, task.id, value('--outcome-file'))
+            : task.reports?.at(-1);
+          if (!report || 'error' in report)
+            throw new Error(
+              report && 'error' in report
+                ? report.error
+                : (task.reportError ??
+                    'No durable report. Use --generate for a terminal legacy task.'),
+            );
+          verifyReport(ops.directory, report);
+          console.log(
+            optionArgs.includes('--json')
+              ? JSON.stringify(report, null, 2)
+              : report.markdown + '\n\nReport SHA-256: ' + report.digest,
+          );
         } else if (['status', 'watch', 'logs'].includes(action)) {
           const id = args[2]?.startsWith('--') ? undefined : args[2];
           const task = selectTask(ops.read().tasks, id);

@@ -225,6 +225,8 @@ def status_panel(task: dict):
         ),
         ("Progress", f"stall window {task.get('progressWindow', 0)}s (0 disables it)"),
         ("Acceptance", task["acceptance"]),
+        ("Criteria", "; ".join(task.get("successCriteria", [])) or "Legacy objective and validator"),
+        ("Report", task.get("reportError") or (f"atsys task report {task['id']} · {task['report']['digest']}" if task.get("report") else "Pending / legacy: explicit retrospective generation available")),
         ("Next", task["next"]),
         ("Task", task["id"]),
     ]:

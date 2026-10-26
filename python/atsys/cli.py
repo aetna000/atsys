@@ -232,9 +232,15 @@ def task_template(args: list[str]) -> int:
     options = parser.parse_args(args)
     config = json.loads((RESOURCES / "task-defaults.json").read_text())
     config.update(name=options.name, objective=options.objective, cwd=str(options.project.resolve(strict=True)), worker="codex", validator="command", validationArgv=[], activityTimeoutSeconds=600, allowRepair=options.allow_repair, networkAccess=options.network_access, goalMonitoring=not options.no_goal_monitoring)
+    config["goalContract"] = {
+        "version": 1, "successCriteria": [], "deliverables": [], "constraints": [],
+        "assumptions": [], "unresolvedDecisions": ["Define material goal choices and acceptance evidence before launch"],
+        "stages": [], "planSource": "", "observers": [], "recoveryScope": "",
+        "escalationConditions": [], "budget": "",
+    }
     if options.output:
         _private_json(options.output, config, replace=options.force)
-        print(json.dumps({"config": str(options.output.resolve()), "next": "Set validationArgv to the project's real acceptance command, then submit with atsys task submit --config <file>."}, indent=2))
+        print(json.dumps({"config": str(options.output.resolve()), "next": "Complete goalContract and plan from request/project inspection; resolve material questions; set validationArgv to the real acceptance command, then submit with atsys task submit --config <file>."}, indent=2))
     else:
         print(json.dumps(config, indent=2))
     return 0

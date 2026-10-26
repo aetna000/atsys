@@ -4,7 +4,7 @@ The wheel packages this checkout's operational runtime and web dashboard. It pre
 
 ## Install the published release
 
-The terminal/control beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b2`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b2.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.
+The goal-workflow beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b3`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b3.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.
 
 ```sh
 python -m pip install --upgrade atsys==0.2.1

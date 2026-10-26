@@ -1,3 +1,4 @@
+import type { GoalContract } from '../server/operations/goal.js';
 export interface Progress {
   completed: number;
   total: number;
@@ -104,6 +105,9 @@ export interface HookRun {
   resumedAt?: string;
 }
 export interface TaskConfig {
+  goalContract?: GoalContract;
+  outcomeFile?: string;
+  outcomeRequired?: boolean;
   name: string;
   objective: string;
   cwd: string;
@@ -200,6 +204,7 @@ export interface Attempt {
   handled: boolean;
   cleanupConfirmed?: boolean;
   cleanupPendingAt?: string;
+  cleanupDiagnostic?: string;
   hookGateRunIds?: string[];
   hookGatePassed?: boolean;
   hookProgressKeys?: string[];
@@ -218,6 +223,9 @@ export interface ManagedTask {
   pauseState?: { requestedAt: string; previousStatus: TaskStatus; resumeRequestedAt?: string };
   attempts: Attempt[];
   events: TaskEvent[];
+  reports?: TaskReport[];
+  reportError?: string;
+  reportRequested?: boolean;
   attentionReason?: string;
   hookRuns?: HookRun[];
   hookCounts?: Record<string, number>;
@@ -305,3 +313,42 @@ export const taskDefaults: TaskConfig = {
   goalMonitoring: true,
   hooks: [],
 };
+
+export interface TaskReport {
+  id: string;
+  digest: string;
+  path: string;
+  terminalKey: string;
+  retrospective: boolean;
+  generatedAt: string;
+  taskId: string;
+  status: TaskStatus;
+  disposition: 'success' | 'blocked' | 'stopped' | 'failure';
+  workflowAccepted: boolean;
+  outcome?: {
+    source: string;
+    digest: string;
+    provenance: 'worker-reported';
+    linkedValidatorAttemptId?: string;
+    data: {
+      version: 1;
+      summary: string;
+      results: {
+        name: string;
+        status: 'passed' | 'failed' | 'partial' | 'unknown';
+        detail: string;
+        evidence: string[];
+      }[];
+      limitations: string[];
+      metrics?: { name: string; value: number | null; unit: string }[];
+      costs?: {
+        amount: number | null;
+        currency: string;
+        source: string;
+        kind: 'reported' | 'estimated';
+        evidence: string[];
+      }[];
+    };
+  };
+  markdown: string;
+}

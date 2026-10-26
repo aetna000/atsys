@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { runtimeArgs } from '../runtime.js';
 import type { Attempt, ManagedTask, OperationsState } from '../../shared/operations.js';
 import { OperationsStore, enqueue, stamp, taskEvent, uid } from './store.js';
-import { killAttempt, runnerIdentity } from './processes.js';
+import { cleanupAttempt, inspectRunner, killAttempt } from './processes.js';
 import { blockerParser } from './codex.js';
 import { setupDoctor } from './doctor.js';
 import { HookService } from './hook-service.js';
@@ -132,7 +132,11 @@ export class Watchdog {
           if (current.status === 'running') queueTickHooks(task, current);
           if (
             current.phase === 'worker' &&
-            (!current.lastObservedAt || Date.now() - Date.parse(current.lastObservedAt) >= 60000)
+            (!current.lastObservedAt ||
+              Date.now() - Date.parse(current.lastObservedAt) >=
+                (current.config.goalContract?.observers.find((o) => o.signal === 'progress')
+                  ?.cadenceSeconds ?? 60) *
+                  1000)
           ) {
             current.lastObservedAt = stamp();
             const age = Math.max(
@@ -155,7 +159,8 @@ export class Watchdog {
                 Date.parse(current.resumedAt ?? current.heartbeatAt),
               ) >
             current.config.heartbeatTimeoutSeconds * 1000;
-          const dead = current.pid && runnerIdentity(current) === 'gone';
+          const observation = current.pid ? inspectRunner(current) : undefined;
+          const dead = observation?.identity === 'gone';
           const phaseTimeout =
             current.phase === 'worker'
               ? current.config.timeoutSeconds
@@ -167,37 +172,23 @@ export class Watchdog {
           const overdue =
             Date.now() - Date.parse(current.startedAt) - (current.pausedMs ?? 0) >
             (phaseTimeout + 3) * 1000;
-          if (stale || dead || overdue) {
-            if (!killAttempt(current)) {
-              this.attention(
-                s,
-                task,
-                'Runner identity mismatch; refusing to signal an unrelated process.',
-              );
-              continue;
-            }
-            current.cleanupConfirmed = true;
+          if (stale || dead || overdue || current.cleanupPendingAt) {
+            if (!this.cleanup(s, task, current, observation)) continue;
             current.status = 'lost';
             current.endedAt = stamp();
             current.failure = dead
               ? 'Runner process disappeared'
               : overdue
                 ? 'Attempt exceeded hard deadline'
-                : 'Runner heartbeat expired';
+                : stale
+                  ? 'Runner heartbeat expired'
+                  : 'Runner cleanup reconciliation required';
             taskEvent(task, 'observer', 'runner.lost', current.failure);
           } else continue;
         }
         if (current && !current.handled) {
           if (!current.cleanupConfirmed) {
-            if (!killAttempt(current)) {
-              // ps can briefly expose an exiting runner without its command line.
-              // Wait for reconciliation, never signal an unverified/foreign PID.
-              current.cleanupPendingAt ??= stamp();
-              if (Date.now() - Date.parse(current.cleanupPendingAt) < 2000) continue;
-              this.attention(s, task, 'Process group cleanup could not be confirmed.');
-              continue;
-            }
-            current.cleanupConfirmed = true;
+            if (!this.cleanup(s, task, current)) continue;
           }
           current.handled = true;
           if (
@@ -346,6 +337,37 @@ export class Watchdog {
   private retryAvailable(t: ManagedTask) {
     return t.attempts.filter((a) => a.phase === 'worker').length <= t.config.maxRetries;
   }
+  private cleanup(
+    s: OperationsState,
+    task: ManagedTask,
+    attempt: Attempt,
+    initial?: ReturnType<typeof inspectRunner>,
+  ) {
+    const result = cleanupAttempt(attempt);
+    attempt.cleanupDiagnostic =
+      (initial ? `observed=${initial.identity}/${initial.detail}; cleanup=` : '') +
+      result.diagnostic;
+    if (!result.confirmed) {
+      if (!attempt.cleanupPendingAt) {
+        attempt.cleanupPendingAt = stamp();
+        taskEvent(task, 'observer', 'cleanup.pending', attempt.cleanupDiagnostic);
+      }
+      // Match terminal cleanup's bounded reconciliation window. Pending cleanup
+      // stays sticky even if the next process snapshot changes; no retry can run.
+      if (Date.now() - Date.parse(attempt.cleanupPendingAt) >= 2000)
+        this.attention(
+          s,
+          task,
+          `Process group cleanup could not be confirmed: ${attempt.cleanupDiagnostic}`,
+        );
+      return false;
+    }
+    attempt.cleanupConfirmed = true;
+    if (attempt.cleanupPendingAt)
+      taskEvent(task, 'observer', 'cleanup.confirmed', attempt.cleanupDiagnostic);
+    attempt.cleanupPendingAt = undefined;
+    return true;
+  }
   private retry(s: OperationsState, t: ManagedTask, reason: string) {
     if (!this.retryAvailable(t)) return this.attention(s, t, 'Retry budget exhausted. ' + reason);
     t.status = 'recovering';
@@ -387,6 +409,9 @@ export class Watchdog {
       heartbeatAt: stamp(),
       lastProgressAt: stamp(),
       output: '',
+      ...(phase === 'worker'
+        ? { progress: t.attempts.findLast((a) => a.phase === 'worker' && a.progress)?.progress }
+        : {}),
       config: structuredClone(config),
       handled: false,
     };

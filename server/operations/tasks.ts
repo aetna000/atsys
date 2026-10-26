@@ -1,3 +1,4 @@
+import { persistReport, terminal } from './reports.js';
 import type { ManagedTask, TaskConfig } from '../../shared/operations.js';
 import { DomainError } from '../control-plane.js';
 import { creditPause, taskElapsed } from './pause.js';
@@ -166,5 +167,26 @@ export function changeTask(
       );
     }
     return t;
+  });
+}
+
+// Explicit attachment only; no daemon launch, config edit or receipt rewrite.
+export function generateRetrospectiveReport(
+  store: OperationsStore,
+  id: string,
+  outcomeFile?: string,
+) {
+  return store.update((s) => {
+    const task = s.tasks.find((t) => t.id === id);
+    if (!task) throw new DomainError('Task not found', 404);
+    if (!terminal(task))
+      throw new DomainError('Retrospective reports require a terminal task', 409);
+    try {
+      return persistReport(store.directory, task, true, outcomeFile);
+    } catch {
+      task.reportError =
+        'Retrospective report generation or verification failed; original receipts are unchanged.';
+      return { error: task.reportError };
+    }
   });
 }

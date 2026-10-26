@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { OperationsState, ManagedTask, TaskEvent } from '../../shared/operations.js';
 import { taskDefaults } from '../../shared/operations.js';
 import { redact } from '../control-plane.js';
+import { persistReport, terminal, terminalKey } from './reports.js';
 import { queueLifecycleHooks } from './hooks.js';
 export const stamp = () => new Date().toISOString();
 export const uid = (prefix: string) => `${prefix}-${randomUUID()}`;
@@ -91,7 +92,48 @@ export class OperationsStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const s = this.read();
+      const previous = new Map(
+        s.tasks.map((t) => [t.id, { status: t.status, key: terminalKey(t) }]),
+      );
       const result = fn(s);
+      for (const t of s.tasks) {
+        const before = previous.get(t.id);
+        if (
+          terminal(t) &&
+          before &&
+          (before.status !== t.status || before.key !== terminalKey(t))
+        ) {
+          try {
+            const r = persistReport(this.directory, t);
+            taskEvent(
+              t,
+              'system',
+              'report.generated',
+              `Durable outcome report ${r.id} · SHA-256 ${r.digest}. Workflow acceptance: ${r.workflowAccepted ? 'declared validator passed' : 'not established'}; domain results remain explicitly sourced. Access with atsys task report ${t.id}.`,
+            );
+          } catch (error) {
+            t.reportError =
+              'Terminal report generation or verification failed. Review durable storage and outcome evidence; completion is not established. ' +
+              redact(error instanceof Error ? error.message : 'Unknown report error').slice(0, 600);
+            if (t.status === 'completed') {
+              t.status = 'needs_attention';
+              t.attentionReason = t.reportError;
+            }
+            for (const delivery of s.deliveries) {
+              if (
+                delivery.taskId === t.id &&
+                delivery.status === 'pending' &&
+                delivery.key === `${t.attempts.at(-1)?.id}:complete`
+              ) {
+                delivery.status = 'failed';
+                delivery.error =
+                  'Completion delivery withheld because durable report generation failed.';
+              }
+            }
+            taskEvent(t, 'system', 'report.failed', t.reportError);
+          }
+        }
+      }
       this.db.prepare('UPDATE operations SET document=? WHERE id=1').run(JSON.stringify(s));
       this.db.exec('COMMIT');
       return result;

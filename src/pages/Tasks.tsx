@@ -600,6 +600,66 @@ function TaskDetail({
           )}
         </div>
       </Panel>
+      <Panel title="Goal contract" eyebrow="INTENT AND ACCEPTANCE">
+        <div className="ops-panel-body">
+          <p>{t.config.objective}</p>
+          {t.config.goalContract ? (
+            <>
+              <h3>Success criteria</h3>
+              <ul>
+                {t.config.goalContract.successCriteria.map((v) => (
+                  <li key={v}>{v}</li>
+                ))}
+              </ul>
+              <h3>Observation plan</h3>
+              <ul>
+                {t.config.goalContract.observers.map((o, i) => (
+                  <li key={i}>
+                    {o.signal} · {o.cadenceSeconds}s · {o.rationale}
+                  </li>
+                ))}
+              </ul>
+              <p>Recovery scope: {t.config.goalContract.recoveryScope}</p>
+              <p>Budget: {t.config.goalContract.budget}</p>
+            </>
+          ) : (
+            <p>Legacy goal contract: objective and declared validator retained.</p>
+          )}
+        </div>
+      </Panel>
+      <Panel title="Durable outcome report" eyebrow="WORKFLOW ACCEPTANCE AND DOMAIN RESULTS">
+        <div className="ops-panel-body" style={{ overflowWrap: 'anywhere' }}>
+          {t.reportError && <Alert severity="error">{t.reportError}</Alert>}
+          {t.reports?.at(-1) ? (
+            <>
+              <p>
+                {t.reports.at(-1)!.retrospective
+                  ? 'Retrospective attachment'
+                  : 'Automatic terminal report'}{' '}
+                · {t.reports.at(-1)!.generatedAt}
+              </p>
+              <p>SHA-256 {t.reports.at(-1)!.digest}</p>
+              <p>
+                Storage: {t.reports.at(-1)!.path} · {t.reports.length} retained report(s)
+              </p>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                {t.reports.at(-1)!.markdown}
+              </pre>
+            </>
+          ) : (
+            <p>
+              {['completed', 'stopped', 'needs_attention'].includes(t.status)
+                ? 'No report attached to this legacy terminal task.'
+                : 'Report will be generated automatically on terminal transition.'}
+            </p>
+          )}
+          {['completed', 'stopped', 'needs_attention'].includes(t.status) && (
+            <Button disabled={busy} onClick={() => void action(`/tasks/${t.id}/report`, {})}>
+              Generate retrospective report
+            </Button>
+          )}
+        </div>
+      </Panel>
       <TaskActivity task={t} />
       <div className="ops-wiring">
         <Wire

@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { suspended, taskElapsed } from './pause.js';
+import { mergeProgress } from './progress.js';
 import { runtimeArgs } from '../runtime.js';
 import { OperationsStore, stamp, taskEvent, enqueue } from './store.js';
 import { hookRunnerIdentity, killAttempt, killHookRun } from './processes.js';
@@ -10,7 +12,8 @@ export class HookService {
   tick(owner: string) {
     const launches = this.store.update((s) => {
       if (s.daemon?.owner !== owner) return [] as { taskId: string; runId: string }[];
-      for (const task of s.tasks)
+      for (const task of s.tasks) {
+        if (suspended(task) && !task.stopRequested) continue;
         for (const run of task.hookRuns ?? []) {
           const attempt = task.attempts.find((a) => a.id === run.attemptId);
           const terminalCallback = ['on_task_complete', 'on_task_stop', 'on_escalation'].includes(
@@ -19,7 +22,7 @@ export class HookService {
           const obsolete =
             !terminalCallback &&
             (task.stopRequested ||
-              Date.now() - Date.parse(task.createdAt) > task.config.taskTimeoutSeconds * 1000 ||
+              taskElapsed(task) > task.config.taskTimeoutSeconds * 1000 ||
               ((run.event.startsWith('codex_') ||
                 run.event === 'on_tick' ||
                 run.event === 'before_run' ||
@@ -32,13 +35,18 @@ export class HookService {
             run.cleanupConfirmed = true;
           }
           if (run.status === 'running') {
-            const age = Date.now() - Date.parse(run.startedAt!);
+            const age = Date.now() - Date.parse(run.startedAt!) - (run.pausedMs ?? 0);
             const identity = run.pid ? hookRunnerIdentity(run) : 'gone';
             if (
               age > (run.hook.timeoutSeconds + 3) * 1000 ||
               (age > 1000 && run.pid && identity === 'gone') ||
               (age > 10000 && !run.pid) ||
-              Date.now() - Date.parse(run.heartbeatAt ?? run.startedAt!) > 15000
+              Date.now() -
+                Math.max(
+                  Date.parse(run.heartbeatAt ?? run.startedAt!),
+                  Date.parse(run.resumedAt ?? run.startedAt!),
+                ) >
+                15000
             ) {
               if (killHookRun(run)) {
                 run.status = 'interrupted';
@@ -56,6 +64,7 @@ export class HookService {
           }
           this.apply(s, task, run, attempt);
         }
+      }
       let count = s.tasks.reduce(
         (n, t) => n + (t.hookRuns ?? []).filter((r) => r.status === 'running').length,
         0,
@@ -63,10 +72,12 @@ export class HookService {
       const launches: { taskId: string; runId: string }[] = [];
       for (const task of s.tasks) {
         if (count >= 4) break;
+        if (suspended(task)) continue;
         if (task.hookRuns?.some((r) => r.status === 'running')) continue;
         const next = task.hookRuns?.find((r) => r.status === 'queued');
         if (!next) continue;
         next.status = 'running';
+        next.pauseProtocol = 1;
         next.startedAt = stamp();
         next.heartbeatAt = stamp();
         taskEvent(task, 'observer', 'hook.started', `${next.hook.id}: ${next.event} (${next.id})`);
@@ -100,14 +111,8 @@ export class HookService {
       executing(attempt) &&
       task.attempts.at(-1)?.id === attempt!.id
     ) {
-      const p = run.result.progress;
-      if (
-        attempt!.progress &&
-        (p.completed < attempt!.progress.completed || p.total !== attempt!.progress.total)
-      ) {
-        run.status = 'failed';
-        run.error = 'Hook progress cannot regress or change the total';
-      } else {
+      try {
+        const p = mergeProgress(attempt!.progress, run.result.progress);
         const key = JSON.stringify([p.completed, p.total, p.checkpoint]);
         attempt!.hookProgressKeys ??= [];
         const old =
@@ -117,10 +122,12 @@ export class HookService {
             attempt!.progress.total,
             attempt!.progress.checkpoint,
           ]);
+        attempt!.progress = p;
+        attempt!.progressReporter = { kind: 'hook', reference: run.hook.id };
         if (key !== old && !attempt!.hookProgressKeys.includes(key)) {
           attempt!.hookProgressKeys.push(key);
-          attempt!.progress = p;
           attempt!.lastProgressAt = stamp();
+          attempt!.progressPauseCreditMs = 0;
           taskEvent(
             task,
             'observer',
@@ -128,8 +135,12 @@ export class HookService {
             `${run.hook.id}: ${p.completed}/${p.total} reported units${p.checkpoint ? ` (${p.checkpoint})` : ''}`,
           );
         }
+      } catch (error) {
+        run.status = 'failed';
+        run.error = error instanceof Error ? error.message : 'Invalid hook progress';
       }
     }
+
     const failed = run.status !== 'succeeded';
     taskEvent(
       task,

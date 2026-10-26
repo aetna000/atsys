@@ -26,6 +26,8 @@ def observe(
         completed: float = Field(ge=0)
         total: float = Field(gt=0)
         checkpoint: str | None = None
+        milestones: list[str] | None = None
+        planSource: str | None = None
 
     class Observation(BaseModel):
         model_config = ConfigDict(extra="forbid")

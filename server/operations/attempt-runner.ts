@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import {
   existsSync,
@@ -9,8 +10,9 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
 import { OperationsStore, stamp, taskEvent } from './store.js';
+import { suspended, waitForResume } from './pause.js';
+import { mergeProgress } from './progress.js';
 import { inside } from './config.js';
 import { codexInvocation, proposalParser, proposalSchema, repairSchema } from './codex.js';
 import { redact, validateResult } from '../control-plane.js';
@@ -18,28 +20,36 @@ import type { Attempt } from '../../shared/operations.js';
 
 const [directory, taskId, attemptId] = process.argv.slice(2);
 const store = new OperationsStore(directory);
-const initial = store.update((s) => {
-  const task = s.tasks.find((t) => t.id === taskId);
-  const a = task?.attempts.find((a) => a.id === attemptId);
-  if (
-    !task ||
-    !a ||
-    task.stopRequested ||
-    a.status !== 'starting' ||
-    (a.pid && a.pid !== process.pid)
-  )
-    return null;
-  a.pid = process.pid;
-  a.status = 'running';
-  a.heartbeatAt = stamp();
-  taskEvent(
-    task,
-    a.phase === 'supervisor' ? 'supervisor' : a.phase === 'validator' ? 'observer' : 'worker',
-    'attempt.started',
-    `${a.phase} process started (PID ${process.pid}).`,
-  );
-  return { task, attempt: a };
-});
+const initial = await (async () => {
+  while (true) {
+    if (!(await waitForResume(store, taskId))) return null;
+    const value = store.update((s) => {
+      const task = s.tasks.find((t) => t.id === taskId);
+      if (task?.pauseState) return 'paused' as const;
+      const a = task?.attempts.find((a) => a.id === attemptId);
+      if (
+        !task ||
+        !a ||
+        task.stopRequested ||
+        a.status !== 'starting' ||
+        (a.pid && a.pid !== process.pid)
+      )
+        return null;
+      a.pid = process.pid;
+      a.status = 'running';
+      a.heartbeatAt = stamp();
+      taskEvent(
+        task,
+        a.phase === 'supervisor' ? 'supervisor' : a.phase === 'validator' ? 'observer' : 'worker',
+        'attempt.started',
+        `${a.phase} process started (PID ${process.pid}).`,
+      );
+      return { task, attempt: a };
+    });
+    if (value === 'paused') continue;
+    return value;
+  }
+})();
 if (!initial) {
   store.close();
   process.exit(0);
@@ -90,22 +100,18 @@ const buffers = { stdout: '', stderr: '' };
 let lastProgressText = '';
 const seenProgress = new Set<string>();
 let progress = attempt.progress;
+let progressReporter = attempt.progressReporter;
 let lastProgressAt = attempt.startedAt;
 let lastActivityAt = attempt.startedAt;
 function readProgress() {
-  const p = z
-    .object({
-      completed: z.number().nonnegative(),
-      total: z.number().positive(),
-      checkpoint: z.string().max(2000).optional(),
-    })
-    .passthrough()
-    .parse(JSON.parse(safeFile(c.progressFile, 64000).data));
-  if (p.completed > p.total) throw new Error('Progress exceeds total');
-  return { completed: p.completed, total: p.total, checkpoint: p.checkpoint };
+  const { completed, total, checkpoint, milestones, planSource } = JSON.parse(
+    safeFile(c.progressFile, 64000).data,
+  );
+  return mergeProgress(progress, { completed, total, checkpoint, milestones, planSource });
 }
 function captureProgress() {
   const p = readProgress();
+  progressReporter = { kind: 'progress-file', reference: c.progressFile };
   if (progress && (p.completed < progress.completed || p.total !== progress.total))
     throw new Error('Progress must not regress or move the goal');
   const signal = JSON.stringify([p.completed, p.total, p.checkpoint]);
@@ -114,6 +120,8 @@ function captureProgress() {
     lastProgressText = signal;
     lastProgressAt = stamp();
     progress = p;
+  } else {
+    progress = p; // Metadata alone is retained without advancing the progress clock.
   }
 }
 try {
@@ -121,6 +129,7 @@ try {
     const p = readProgress();
     lastProgressText = JSON.stringify([p.completed, p.total, p.checkpoint]);
     seenProgress.add(lastProgressText);
+    progressReporter = { kind: 'progress-file', reference: c.progressFile };
     progress = p; // Show the restored checkpoint without pretending it is new progress.
   }
 } catch {
@@ -134,6 +143,18 @@ const timeout =
       : attempt.phase === 'validator'
         ? c.validationTimeoutSeconds
         : c.timeoutSeconds) * 1000;
+function persistProgress(a: Attempt) {
+  try {
+    if (progress) a.progress = mergeProgress(a.progress, progress);
+    if (progressReporter) a.progressReporter = progressReporter;
+    if (Date.parse(lastProgressAt) > Date.parse(a.lastProgressAt)) {
+      a.lastProgressAt = lastProgressAt;
+      a.progressPauseCreditMs = 0;
+    }
+  } catch {
+    /* Preserve newer valid hook/file evidence on a concurrent update. */
+  }
+}
 function append(text: string) {
   output = (output + redact(text) + '\n').slice(-32000);
 }
@@ -287,14 +308,8 @@ function finish() {
     a.endedAt = stamp();
     a.heartbeatAt = stamp();
     a.output = output;
-    if (
-      progress &&
-      (!a.progress ||
-        (progress.total === a.progress.total && progress.completed >= a.progress.completed))
-    )
-      a.progress = progress;
-    if (Date.parse(lastProgressAt) > Date.parse(a.lastProgressAt))
-      a.lastProgressAt = lastProgressAt;
+    persistProgress(a);
+    if (a.lastActivityAt !== lastActivityAt) a.activityPauseCreditMs = 0;
     a.lastActivityAt = lastActivityAt;
     a.failure = failure && redact(failure);
     a.exitCode = exitCode;
@@ -324,14 +339,19 @@ const timer = setInterval(() => {
     if (Date.parse(a.lastProgressAt) > Date.parse(lastProgressAt)) {
       lastProgressAt = a.lastProgressAt;
       progress = a.progress;
+      progressReporter = a.progressReporter;
     }
     if (current?.stopRequested) return terminate('Operator requested stop');
-    if (Date.now() - Date.parse(attempt.startedAt) > timeout)
+    if (current && suspended(current)) return;
+    if (Date.now() - Date.parse(attempt.startedAt) - (a.pausedMs ?? 0) > timeout)
       return terminate('Attempt deadline exceeded');
     if (
       c.activityTimeoutSeconds &&
       attempt.phase === 'worker' &&
-      Date.now() - Date.parse(lastActivityAt) > c.activityTimeoutSeconds * 1000
+      Date.now() -
+        Date.parse(lastActivityAt) -
+        (lastActivityAt === a.lastActivityAt ? (a.activityPauseCreditMs ?? 0) : 0) >
+        c.activityTimeoutSeconds * 1000
     )
       return terminate('Activity stalled: no process output within configured window');
     if (c.progressFile && attempt.phase === 'worker') {
@@ -344,7 +364,10 @@ const timer = setInterval(() => {
     if (
       attempt.phase === 'worker' &&
       c.progressTimeoutSeconds &&
-      Date.now() - Date.parse(lastProgressAt) > c.progressTimeoutSeconds * 1000
+      Date.now() -
+        Date.parse(lastProgressAt) -
+        (lastProgressAt === a.lastProgressAt ? (a.progressPauseCreditMs ?? 0) : 0) >
+        c.progressTimeoutSeconds * 1000
     )
       return terminate('Progress stalled: no valid progress change within configured window');
     store.update((s) => {
@@ -352,14 +375,8 @@ const timer = setInterval(() => {
       if (a && a.status === 'running' && a.pid === process.pid) {
         a.heartbeatAt = stamp();
         a.output = output;
-        if (
-          progress &&
-          (!a.progress ||
-            (progress.total === a.progress.total && progress.completed >= a.progress.completed))
-        )
-          a.progress = progress;
-        if (Date.parse(lastProgressAt) > Date.parse(a.lastProgressAt))
-          a.lastProgressAt = lastProgressAt;
+        persistProgress(a);
+        if (a.lastActivityAt !== lastActivityAt) a.activityPauseCreditMs = 0;
         a.lastActivityAt = lastActivityAt;
       }
     });

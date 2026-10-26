@@ -4112,3 +4112,35 @@ td small {
 .header-actions > .MuiIconButton-root {
   display: inline-flex;
 }
+
+.ops-milestones {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.ops-milestones p {
+  overflow-wrap: anywhere;
+}
+.ops-milestones li {
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+.ops-milestone-state {
+  display: inline-block;
+  margin-right: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ops-task-container {
+  border-bottom: 1px solid var(--border);
+}
+.ops-task-container > .ops-task-row {
+  width: 100%;
+}
+.ops-task-shortcuts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding: 0 20px 14px;
+}

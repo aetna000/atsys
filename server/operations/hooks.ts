@@ -7,6 +7,7 @@ import {
   type HookRun,
   type ManagedTask,
 } from '../../shared/operations.js';
+import { progressSchema } from './progress.js';
 import { redact } from '../control-plane.js';
 
 export const hookSchema = z
@@ -49,15 +50,7 @@ export const hookResultSchema = z
   .object({
     message: z.string().max(4000).optional(),
     decision: z.enum(['continue', 'fail', 'escalate']).optional(),
-    progress: z
-      .object({
-        completed: z.number().nonnegative(),
-        total: z.number().positive(),
-        checkpoint: z.string().max(2000).optional(),
-      })
-      .strict()
-      .refine((p) => p.completed <= p.total)
-      .optional(),
+    progress: progressSchema.optional(),
   })
   .strict();
 export function queueHooks(

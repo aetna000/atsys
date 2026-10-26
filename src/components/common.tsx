@@ -41,6 +41,9 @@ export function Badge({ value }: { value: string }) {
   ].includes(value)
     ? 'success'
     : [
+          'paused',
+          'pausing',
+          'resuming',
           'degraded',
           'awaiting_approval',
           'investigating',

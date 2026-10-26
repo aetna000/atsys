@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from contextlib import redirect_stdout
-from dataclasses import asdict, dataclass
 import importlib
 import importlib.util
 import inspect
 import json
 import math
-from pathlib import Path
 import sys
+from contextlib import redirect_stdout
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 EVENTS = (
@@ -83,7 +83,13 @@ class HookResult:
             )
         if self.progress is not None:
             progress = self.progress
-            if set(progress) - {"completed", "total", "checkpoint"}:
+            if set(progress) - {
+                "completed",
+                "total",
+                "checkpoint",
+                "milestones",
+                "planSource",
+            }:
                 raise ValueError("Unsupported progress fields")
             completed, total = progress.get("completed"), progress.get("total")
             if (
@@ -99,6 +105,28 @@ class HookResult:
                 raise ValueError(
                     "Progress requires finite 0 <= completed <= total and total > 0"
                 )
+            names = progress.get("milestones")
+            source = progress.get("planSource")
+            if source is not None and (
+                not isinstance(source, str) or not source.strip() or len(source) > 2000
+            ):
+                raise ValueError("Invalid milestone plan source")
+            if names is not None:
+                if (
+                    not isinstance(names, list)
+                    or not 1 <= len(names) <= 100
+                    or any(
+                        not isinstance(name, str) or not name.strip() or len(name) > 300
+                        for name in names
+                    )
+                    or len(set(name.strip() for name in names)) != len(names)
+                    or len(names) != total
+                    or int(completed) != completed
+                    or not source
+                ):
+                    raise ValueError(
+                        "Milestones require unique ordered names, matching total, integer completed count and planSource"
+                    )
             if "checkpoint" in progress and (
                 not isinstance(progress["checkpoint"], str)
                 or len(progress["checkpoint"]) > 2000

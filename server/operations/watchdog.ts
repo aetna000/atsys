@@ -6,6 +6,7 @@ import { killAttempt, runnerIdentity } from './processes.js';
 import { blockerParser } from './codex.js';
 import { setupDoctor } from './doctor.js';
 import { HookService } from './hook-service.js';
+import { reconcilePause, taskElapsed } from './pause.js';
 import { queueHooks, queueTickHooks } from './hooks.js';
 export const active = (a: Attempt) => ['starting', 'running'].includes(a.status);
 export function daemonHealthy(s: OperationsState) {
@@ -33,6 +34,7 @@ export class Watchdog {
         heartbeatAt: stamp(),
         startedAt: stamp(),
         hookProtocol: 1,
+        pauseProtocol: 1,
       };
       return true;
     });
@@ -43,16 +45,17 @@ export class Watchdog {
       if (s.daemon?.owner !== this.owner) return [] as { taskId: string; attemptId: string }[];
       s.daemon.heartbeatAt = stamp();
       s.daemon.hookProtocol = 1;
+      s.daemon.pauseProtocol = 1;
       const launches: { taskId: string; attemptId: string }[] = [];
       for (const task of s.tasks) {
+        if (reconcilePause(task)) continue;
         if (
           ['completed', 'stopped', 'needs_attention'].includes(task.status) &&
           !task.stopRequested
         )
           continue;
         const current = task.attempts.at(-1);
-        const lifetimeExpired =
-          Date.now() - Date.parse(task.createdAt) > task.config.taskTimeoutSeconds * 1000;
+        const lifetimeExpired = taskElapsed(task) > task.config.taskTimeoutSeconds * 1000;
         if (task.stopRequested || lifetimeExpired) {
           if (current && !current.cleanupConfirmed) {
             if (!killAttempt(current)) {
@@ -73,6 +76,7 @@ export class Watchdog {
             this.attention(s, task, 'Task lifetime exceeded. Automatic work stopped.');
           else if (task.status !== 'stopped') {
             task.status = 'stopped';
+            task.pauseState = undefined;
             taskEvent(
               task,
               'policy',
@@ -113,6 +117,10 @@ export class Watchdog {
             }
           } else {
             current.hookGatePassed = true;
+            current.pausedMs = 0;
+            current.progressPauseCreditMs = 0;
+            current.activityPauseCreditMs = 0;
+            current.resumedAt = undefined;
             current.startedAt = stamp();
             current.heartbeatAt = stamp();
             current.lastProgressAt = stamp();
@@ -141,7 +149,11 @@ export class Watchdog {
             );
           }
           const stale =
-            Date.now() - Date.parse(current.heartbeatAt) >
+            Date.now() -
+              Math.max(
+                Date.parse(current.heartbeatAt),
+                Date.parse(current.resumedAt ?? current.heartbeatAt),
+              ) >
             current.config.heartbeatTimeoutSeconds * 1000;
           const dead = current.pid && runnerIdentity(current) === 'gone';
           const phaseTimeout =
@@ -152,7 +164,9 @@ export class Watchdog {
                 : current.phase === 'validator'
                   ? current.config.validationTimeoutSeconds
                   : current.config.repairTimeoutSeconds;
-          const overdue = Date.now() - Date.parse(current.startedAt) > (phaseTimeout + 3) * 1000;
+          const overdue =
+            Date.now() - Date.parse(current.startedAt) - (current.pausedMs ?? 0) >
+            (phaseTimeout + 3) * 1000;
           if (stale || dead || overdue) {
             if (!killAttempt(current)) {
               this.attention(
@@ -364,6 +378,7 @@ export class Watchdog {
     config = t.config,
   ) {
     const a: Attempt = {
+      pauseProtocol: 1,
       id: uid('attempt'),
       phase,
       status: 'starting',

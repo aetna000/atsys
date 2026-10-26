@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.3.0b2
+python -m pip install --upgrade atsys==0.3.0b3
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,24 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b2 on PyPI](https://pypi.org/project/atsys/0.3.0b2/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b2) and [release notes](docs/releases/v0.3.0b2.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b3 on PyPI](https://pypi.org/project/atsys/0.3.0b3/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b3) and [release notes](docs/releases/v0.3.0b3.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+
+## New in 0.3.0b3
+
+The installed skill turns an objective into a goal contract, plan, acceptance checks,
+observer signals and bounded recovery. Progress stays tied to the goal across retries.
+Every completed, blocked or stopped task gets a durable local report containing
+validation evidence, domain results, remaining failures and available costs.
+Completed work and passing results are shown separately.
+
+```sh
+atsys task report TASK_ID
+atsys task report TASK_ID --json
+```
+
+See [goal workflow and limitations](docs/GOAL-WORKFLOW.md) and
+[beta upgrade notes](docs/releases/v0.3.0b3.md). Existing direct task configurations
+remain compatible; their goals are not retroactively qualified.
 
 ## Develop AtSys from source
 

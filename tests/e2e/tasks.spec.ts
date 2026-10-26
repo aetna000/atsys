@@ -67,7 +67,7 @@ test('managed coding task has independent validation, editable configuration and
     await expect(
       page.getByText('Independent validation command exited zero.', { exact: true }).first(),
     ).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText(/feature.txt · SHA-256/)).toBeVisible();
+    await expect(page.getByText(/^feature\.txt · SHA-256/)).toBeVisible();
     await expect(
       page.getByText('build-preflight · before run · succeeded', { exact: true }),
     ).toBeVisible();

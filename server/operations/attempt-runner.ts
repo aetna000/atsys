@@ -220,6 +220,12 @@ function finish() {
   let validation: Attempt['validation'];
   let proposal: Attempt['proposal'];
   let repairResult: Attempt['repairResult'];
+  if (
+    attempt.phase === 'worker' &&
+    provider !== undefined &&
+    providerResult.capacityFailure(exitCode)
+  )
+    failure = 'Provider model capacity unavailable';
   if (!failure && exitCode !== 0) failure = `Process exited with code ${exitCode ?? 'unknown'}`;
   if (
     !failure &&

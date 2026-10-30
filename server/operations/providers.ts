@@ -107,14 +107,49 @@ export class ProviderResult {
   private structured: unknown;
   private error: string | undefined;
   private completed = false;
+  private capacity = false;
+  private terminalCapacity = false;
   constructor(private provider: string) {}
   feed(line: string) {
-    if (this.provider === 'codex') return;
     let row: any;
     try {
       row = JSON.parse(line);
     } catch {
       return;
+    }
+    if (this.provider === 'codex') {
+      const message =
+        row.type === 'turn.failed'
+          ? row.error?.message
+          : row.type === 'error'
+            ? row.message
+            : undefined;
+      if (typeof message === 'string' && /selected model is at capacity/i.test(message)) {
+        this.capacity = true;
+        if (row.type === 'turn.failed') this.terminalCapacity = true;
+      }
+      return;
+    }
+    // Only inspect provider error records, never ordinary assistant or tool text.
+    // Generic rate limits and quota errors are intentionally not model capacity.
+    const errorRecord =
+      (this.provider === 'claude' &&
+        (row.type === 'error' || (row.type === 'result' && row.is_error))) ||
+      (this.provider === 'copilot' && row.type === 'session.error');
+    if (errorRecord) {
+      const errorType = this.provider === 'claude' ? row.error?.type : row.data?.errorType;
+      const message =
+        this.provider === 'claude' ? (row.error?.message ?? row.result) : row.data?.message;
+      if (
+        errorType === 'overloaded_error' ||
+        (typeof message === 'string' &&
+          /(?:model (?:is |currently )?(?:at capacity|overloaded)|selected model is at capacity)/i.test(
+            message,
+          ))
+      ) {
+        this.capacity = true;
+        this.terminalCapacity = true;
+      }
     }
     if (row.is_error || row.type === 'session.error' || row.type === 'error')
       this.error = 'Provider reported an execution error';
@@ -132,6 +167,9 @@ export class ProviderResult {
       this.completed = true;
       this.final = row.data?.content;
     }
+  }
+  capacityFailure(exitCode: number | null = 1) {
+    return this.terminalCapacity || (exitCode !== 0 && this.capacity);
   }
   result() {
     if (this.error) throw new Error(this.error);

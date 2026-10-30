@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atsys"
-version = "0.3.0"
+version = "0.3.1b1"
 description = "Durable coding-task supervision with Codex, Copilot and Claude integration and a local web dashboard"
 readme = "python/README.md"
 requires-python = ">=3.10"

@@ -93,6 +93,15 @@ process.stdin.on('end', () => {
     fs.writeFileSync('repaired', 'fixed');
     return output({ fixed: true, summary: 'Repaired fixture and checked marker' });
   }
+  if (role === 'worker' && mode.capacityModels?.includes(args[args.indexOf('--model') + 1])) {
+    const event = provider === 'codex'
+      ? { type: 'turn.failed', error: { message: 'Selected model is at capacity. Please try a different model.' } }
+      : provider === 'claude'
+        ? { type: 'result', is_error: true, subtype: 'error_during_execution', result: 'Model is at capacity' }
+        : { type: 'session.error', data: { errorType: 'model_unavailable', message: 'Model is at capacity' } };
+    console.log(JSON.stringify(event));
+    process.exit(1);
+  }
   if (mode.error) {
     console.log(
       JSON.stringify(

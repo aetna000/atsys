@@ -35,6 +35,7 @@ export class Watchdog {
         heartbeatAt: stamp(),
         startedAt: stamp(),
         providerProtocol: 1,
+        capacityProtocol: 1,
         hookProtocol: 1,
         pauseProtocol: 1,
       };
@@ -47,6 +48,7 @@ export class Watchdog {
       if (s.daemon?.owner !== this.owner) return [] as { taskId: string; attemptId: string }[];
       s.daemon.heartbeatAt = stamp();
       s.daemon.providerProtocol = 1;
+      s.daemon.capacityProtocol = 1;
       s.daemon.hookProtocol = 1;
       s.daemon.pauseProtocol = 1;
       const launches: { taskId: string; attemptId: string }[] = [];
@@ -227,6 +229,26 @@ export class Watchdog {
               current.failure ?? 'Workload failed validation',
               `${current.id}:incident`,
             );
+            if (
+              current.phase === 'worker' &&
+              current.failure === 'Provider model capacity unavailable' &&
+              task.config.worker !== 'command' &&
+              task.config.recovery !== 'notify' &&
+              task.config.capacityFallbackModels?.length
+            ) {
+              const models = [task.config.model, ...task.config.capacityFallbackModels];
+              const index = models.indexOf(current.config.model);
+              if (index >= 0 && index + 1 < models.length) {
+                this.retry(
+                  s,
+                  task,
+                  `Capacity unavailable for ${current.config.model || 'default model'}; next approved model: ${models[index + 1]}.`,
+                );
+                continue;
+              }
+              this.attention(s, task, 'All configured capacity fallback models are exhausted.');
+              continue;
+            }
             if (task.config.recovery === 'supervised') {
               if (
                 task.attempts.filter((a) => a.phase === 'supervisor').length >=
@@ -313,7 +335,26 @@ export class Watchdog {
             this.attention(s, task, 'Retry budget exhausted.');
             continue;
           }
-          this.launch(task, 'worker', launches);
+          const lastWorker = task.attempts.findLast((a) => a.phase === 'worker');
+          const models = [task.config.model, ...(task.config.capacityFallbackModels ?? [])];
+          const modelIndex =
+            lastWorker?.failure === 'Provider model capacity unavailable'
+              ? models.indexOf(lastWorker.config.model)
+              : -1;
+          const nextModel = modelIndex >= 0 ? models[modelIndex + 1] : undefined;
+          const retainedModel =
+            lastWorker && models.includes(lastWorker.config.model)
+              ? lastWorker.config.model
+              : task.config.model;
+          const workerConfig = { ...task.config, model: nextModel ?? retainedModel };
+          if (nextModel)
+            taskEvent(
+              task,
+              'policy',
+              'model.capacity_fallback',
+              `Capacity fallback: ${lastWorker!.config.model || 'default model'} -> ${nextModel}.`,
+            );
+          this.launch(task, 'worker', launches, workerConfig);
         }
       }
       return launches;

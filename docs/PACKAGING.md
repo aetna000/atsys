@@ -2,6 +2,11 @@
 
 The wheel packages this checkout's operational runtime and web dashboard. It preserves the separate sibling Python implementation in `claude-atsys`; that checkout is not a build dependency. These implementations share the Python distribution name, so use separate environments when comparing them.
 
+## Capacity fallback beta
+
+Install the opt-in beta with `python -m pip install --upgrade atsys==0.3.1b1`.
+See [0.3.1b1 release notes](releases/v0.3.1b1.md). Stable remains 0.3.0.
+
 ## Install the published release
 
 The stable provider release is installed with `python -m pip install --upgrade atsys==0.3.0`. See [release notes](releases/v0.3.0.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.

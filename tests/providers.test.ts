@@ -367,3 +367,171 @@ test('Copilot automatic model routing does not receive unsupported reasoning eff
       assert.doesNotMatch(invocation.prompt, /You choose the number of milestones/);
     }
   }));
+
+test('Codex capacity failure switches only to an explicitly approved model and validates the result', () =>
+  fixture(
+    async ({ submit, until }) => {
+      const t = submit({
+        worker: 'codex',
+        model: 'primary',
+        capacityFallbackModels: ['fallback'],
+        recovery: 'supervised',
+        maxRetries: 1,
+      });
+      const done = await until(t.id, (t) => ['completed', 'needs_attention'].includes(t.status));
+      assert.equal(done.status, 'completed');
+      const attempts = done.attempts.filter((a) => a.phase === 'worker');
+      assert.deepEqual(
+        attempts.map((a) => a.config.model),
+        ['primary', 'fallback'],
+      );
+      assert.equal(attempts[0].failure, 'Provider model capacity unavailable');
+      assert.ok(done.events.some((e) => e.type === 'model.capacity_fallback'));
+      assert.ok(done.attempts.some((a) => a.phase === 'validator' && a.validation?.passed));
+    },
+    { capacityModels: ['primary'] },
+  ));
+
+test('Codex capacity fallbacks stop when approved models or retry budget are exhausted', () =>
+  fixture(
+    async ({ submit, until }) => {
+      const t = submit({
+        worker: 'codex',
+        model: 'primary',
+        capacityFallbackModels: ['fallback'],
+        recovery: 'restart',
+        maxRetries: 2,
+      });
+      const done = await until(t.id, (t) => t.status === 'needs_attention');
+      assert.deepEqual(
+        done.attempts.filter((a) => a.phase === 'worker').map((a) => a.config.model),
+        ['primary', 'fallback'],
+      );
+      assert.match(done.attentionReason!, /fallback models are exhausted/);
+    },
+    { capacityModels: ['primary', 'fallback'] },
+  ));
+
+test('Codex capacity recognition ignores ordinary agent text and unrelated provider errors', () => {
+  const p = new ProviderResult('codex');
+  p.feed(
+    JSON.stringify({ type: 'item.completed', item: { text: 'Selected model is at capacity' } }),
+  );
+  p.feed(JSON.stringify({ type: 'turn.failed', error: { message: 'Authentication failed' } }));
+  assert.equal(p.capacityFailure(), false);
+  p.feed(
+    JSON.stringify({
+      type: 'turn.failed',
+      error: { message: 'Selected model is at capacity. Please try a different model.' },
+    }),
+  );
+  assert.equal(p.capacityFailure(), true);
+});
+
+test('Codex capacity without configured fallback never switches model', () =>
+  fixture(
+    async ({ submit, until }) => {
+      const t = submit({ worker: 'codex', model: 'primary', recovery: 'notify' });
+      const done = await until(t.id, (t) => t.status === 'needs_attention');
+      assert.equal(done.attempts.filter((a) => a.phase === 'worker').length, 1);
+      assert.equal(done.attempts[0].config.model, 'primary');
+      assert.ok(!done.events.some((e) => e.type === 'model.capacity_fallback'));
+    },
+    { capacityModels: ['primary'] },
+  ));
+
+test('Codex capacity does not bypass the retry budget', () =>
+  fixture(
+    async ({ submit, until }) => {
+      const t = submit({
+        worker: 'codex',
+        model: 'primary',
+        capacityFallbackModels: ['fallback'],
+        recovery: 'restart',
+        maxRetries: 0,
+      });
+      const done = await until(t.id, (t) => t.status === 'needs_attention');
+      assert.equal(done.attempts.filter((a) => a.phase === 'worker').length, 1);
+      assert.match(done.attentionReason!, /Retry budget exhausted/);
+    },
+    { capacityModels: ['primary'] },
+  ));
+
+for (const provider of ['claude', 'copilot'] as const) {
+  test(`${provider}: capacity failure switches to approved model and independently validates`, () =>
+    fixture(
+      async ({ submit, until }) => {
+        const t = submit({
+          worker: provider,
+          model: 'primary',
+          capacityFallbackModels: ['fallback'],
+          recovery: 'supervised',
+          maxRetries: 1,
+        });
+        const done = await until(t.id, (t) => ['completed', 'needs_attention'].includes(t.status));
+        assert.equal(done.status, 'completed');
+        assert.deepEqual(
+          done.attempts.filter((a) => a.phase === 'worker').map((a) => a.config.model),
+          ['primary', 'fallback'],
+        );
+        assert.equal(done.attempts[0].failure, 'Provider model capacity unavailable');
+        assert.ok(done.events.some((e) => e.type === 'model.capacity_fallback'));
+        assert.ok(done.attempts.some((a) => a.phase === 'validator' && a.validation?.passed));
+      },
+      { capacityModels: ['primary'] },
+    ));
+
+  test(`${provider}: capacity fallback exhaustion requires attention`, () =>
+    fixture(
+      async ({ submit, until }) => {
+        const t = submit({
+          worker: provider,
+          model: 'primary',
+          capacityFallbackModels: ['fallback'],
+          recovery: 'restart',
+          maxRetries: 2,
+        });
+        const done = await until(t.id, (t) => t.status === 'needs_attention');
+        assert.deepEqual(
+          done.attempts.filter((a) => a.phase === 'worker').map((a) => a.config.model),
+          ['primary', 'fallback'],
+        );
+        assert.match(done.attentionReason!, /fallback models are exhausted/);
+      },
+      { capacityModels: ['primary', 'fallback'] },
+    ));
+
+  test(`${provider}: quota and assistant messages cannot trigger model fallback`, () => {
+    const p = new ProviderResult(provider);
+    p.feed(
+      JSON.stringify(
+        provider === 'claude'
+          ? { type: 'result', is_error: true, result: 'Monthly spending limit reached' }
+          : { type: 'session.error', data: { errorType: 'quota', message: 'Quota exhausted' } },
+      ),
+    );
+    p.feed(
+      JSON.stringify({ type: 'assistant.message', data: { content: 'Model is at capacity' } }),
+    );
+    assert.equal(p.capacityFailure(), false);
+  });
+}
+
+test('capacity fallback requires a healthy upgraded watchdog', () =>
+  fixture(async ({ root, store }) => {
+    const c = withDefaults({
+      cwd: root,
+      name: 'Capacity guard',
+      worker: 'codex',
+      objective: 'Check watchdog compatibility',
+      capacityFallbackModels: ['fallback'],
+    });
+    store.update((s) => {
+      delete s.daemon!.capacityProtocol;
+    });
+    assert.throws(() => createTask(store, c), /healthy upgraded watchdog/);
+    store.update((s) => {
+      s.daemon!.capacityProtocol = 1;
+    });
+    assert.ok(createTask(store, c).id);
+  }));

@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.3.0b4
+python -m pip install --upgrade atsys==0.3.0
 cd /path/to/your/project
 atsys init
 ```
@@ -26,7 +26,7 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0b4 on PyPI](https://pypi.org/project/atsys/0.3.0b4/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0b4) and [release notes](docs/releases/v0.3.0b4.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0 on PyPI](https://pypi.org/project/atsys/0.3.0/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0) and [release notes](docs/releases/v0.3.0.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
 ## New in 0.3.0b3
 
@@ -58,9 +58,9 @@ Open **http://127.0.0.1:5173**. For a built application, run `npm run build` the
 
 The 0.3.0b1 beta UI exposes managed tasks and operational service/Telegram settings. Sample fleet, costs, approvals and unavailable companion pages are removed from its navigation and routes. No Docker, Kubernetes, AtMem, or AtFlows is required.
 
-## Coding provider support in 0.3.0b4
+## Coding provider support in 0.3.0
 
-The 0.3.0b4 beta adds GitHub Copilot CLI and Claude Code alongside
+The 0.3.0 release adds GitHub Copilot CLI and Claude Code alongside
 Codex for managed workers, supervisors and repairs. Shared goal/progress,
 validation, reports, hooks and process controls apply to all three. Use
 `atsys init --provider copilot` or `--provider claude`;

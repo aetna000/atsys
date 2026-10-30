@@ -1,7 +1,7 @@
-# Coding providers — 0.3.0b4
+# Coding providers — 0.3.0
 
 AtSys supports Codex, GitHub Copilot CLI and Claude Code as coding workers,
-read-only supervisors and bounded repair agents. The 0.3.0b4 beta extends the
+read-only supervisors and bounded repair agents. The 0.3.0 beta extends the
 0.3.0b3 goal workflow with independent provider selection for each role.
 
 | Function | Codex | GitHub Copilot | Claude Code |

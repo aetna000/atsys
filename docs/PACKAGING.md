@@ -4,22 +4,22 @@ The wheel packages this checkout's operational runtime and web dashboard. It pre
 
 ## Install the published release
 
-The provider beta is installed explicitly with `python -m pip install --upgrade atsys==0.3.0b4`. Stable users can remain on 0.2.1. See [beta release notes](releases/v0.3.0b4.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.
+The stable provider release is installed with `python -m pip install --upgrade atsys==0.3.0`. See [release notes](releases/v0.3.0.md). Pause requires the upgraded watchdog and newly launched runners; older active runners can still be stopped.
 
 ```sh
-python -m pip install --upgrade atsys==0.2.1
+python -m pip install --upgrade atsys==0.3.0
 cd /path/to/your/project
 atsys init
 ```
 
-See [0.2.1 release notes](releases/v0.2.1.md), [PyPI](https://pypi.org/project/atsys/0.2.1/) and [GitHub release assets](https://github.com/aetna000/atsys/releases/tag/v0.2.1). Publication is complete only after the tag workflow and registry checks succeed. The historical [0.2.0 workflow](https://github.com/aetna000/atsys/actions/runs/40031931023) established the Trusted Publishing setup; its recorded artifact hashes apply only to that older release.
+See [0.3.0 release notes](releases/v0.3.0.md), [PyPI](https://pypi.org/project/atsys/0.3.0/) and [GitHub release assets](https://github.com/aetna000/atsys/releases/tag/v0.3.0). Publication is complete only after the tag workflow and registry checks succeed. The historical [0.2.0 workflow](https://github.com/aetna000/atsys/actions/runs/40031931023) established the Trusted Publishing setup; its recorded artifact hashes apply only to that older release.
 
 ## Use a downloaded or locally built release
 
 ```sh
-pip install /absolute/path/to/release/atsys-0.2.1-py3-none-any.whl
+pip install /absolute/path/to/release/atsys-0.3.0-py3-none-any.whl
 # Alternatively, isolate the command with pipx or uv:
-uv tool install /absolute/path/to/release/atsys-0.2.1-py3-none-any.whl
+uv tool install /absolute/path/to/release/atsys-0.3.0-py3-none-any.whl
 cd /path/to/existing/git/repository
 atsys init
 ```
@@ -59,7 +59,7 @@ python -m pip install build twine
 python -m build --outdir release
 python -m twine check release/*
 python -m venv /tmp/atsys-wheel-test
-/tmp/atsys-wheel-test/bin/pip install release/atsys-0.2.1-py3-none-any.whl
+/tmp/atsys-wheel-test/bin/pip install release/atsys-0.3.0-py3-none-any.whl
 /tmp/atsys-wheel-test/bin/python tests/packaging/test_install.py -v
 ```
 

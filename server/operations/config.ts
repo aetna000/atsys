@@ -28,6 +28,7 @@ export const configSchema = z
     argv: z.array(arg).max(100),
     resumeArgv: z.array(arg).max(100),
     model: z.string().max(100),
+    capacityFallbackModels: z.array(z.string().trim().min(1).max(100)).max(5).optional(),
     reasoningEffort: effort,
     validator: z.enum(['exit-code', 'command', 'benchmark-json']),
     validationArgv: z.array(arg).max(100),
@@ -109,6 +110,19 @@ export function validateConfig(input: unknown): TaskConfig {
   } catch {
     throw new DomainError('Working directory must be an existing local directory', 400);
   }
+  if (c.capacityFallbackModels?.length && (c.worker === 'command' || c.recovery === 'notify'))
+    throw new DomainError(
+      'Capacity fallbacks require a coding provider and restart or supervised recovery',
+      400,
+    );
+  if (
+    c.capacityFallbackModels?.some((m) => m === c.model.trim()) ||
+    new Set(c.capacityFallbackModels).size !== (c.capacityFallbackModels?.length ?? 0)
+  )
+    throw new DomainError(
+      'Capacity fallback models must be distinct from each other and the initial model',
+      400,
+    );
   if (c.worker === 'command' && !c.argv[0]?.trim())
     throw new DomainError('Command requires an executable in argv[0]', 400);
   if (c.resumeArgv.length && !c.resumeArgv[0].trim())

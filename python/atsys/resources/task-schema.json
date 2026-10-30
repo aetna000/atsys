@@ -231,6 +231,15 @@
       "type": "string",
       "maxLength": 100
     },
+    "capacityFallbackModels": {
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      }
+    },
     "reasoningEffort": {
       "type": "string",
       "enum": [

@@ -28,6 +28,14 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0 on PyPI](https://pypi.org/project/atsys/0.3.0/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0) and [release notes](docs/releases/v0.3.0.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
+## Beta: model capacity fallback
+
+AtSys 0.3.1b1 adds opt-in model capacity recovery for managed Codex, Claude Code,
+and GitHub Copilot workers. Install explicitly with `python -m pip install --upgrade
+atsys==0.3.1b1`; see [beta release notes](docs/releases/v0.3.1b1.md) for
+configuration, watchdog upgrade requirements and important limits. Stable remains
+0.3.0.
+
 ## New in 0.3.0b3
 
 The installed skill turns an objective into a goal contract, plan, acceptance checks,

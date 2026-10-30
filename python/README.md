@@ -72,3 +72,10 @@ permission; their local shell tools do not have Codex's OS sandbox guarantee.
 Native callbacks have provider-specific event limits. See `docs/PROVIDERS.md` and
 `docs/releases/v0.3.0.md`. Restart an owned idle watchdog with the upgraded
 package before submitting new provider tasks; do not replace active runners.
+
+## Capacity recovery beta
+
+AtSys 0.3.1b1 adds opt-in capacity fallback for managed Codex, Claude Code and
+Copilot workers. Install explicitly with `pip install --upgrade atsys==0.3.1b1`.
+See `docs/releases/v0.3.1b1.md` and `docs/PROVIDERS.md` for configuration,
+watchdog upgrade and limits.

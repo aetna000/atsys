@@ -23,6 +23,14 @@ export function requireHookSupport(store: OperationsStore, config: TaskConfig) {
       'This task requires an upgraded multi-provider watchdog. Restart the watchdog from this runtime; existing work is preserved.',
       409,
     );
+  if (
+    config.capacityFallbackModels?.length &&
+    (!owner || owner.capacityProtocol !== 1 || Date.now() - Date.parse(owner.heartbeatAt) >= 10000)
+  )
+    throw new DomainError(
+      'Capacity fallback requires a healthy upgraded watchdog. Restart an owned, idle watchdog using this runtime.',
+      409,
+    );
   if (!config.hooks.length) return;
   const daemon = store.read().daemon;
   if (!daemon || Date.now() - Date.parse(daemon.heartbeatAt) >= 10000 || daemon.hookProtocol !== 1)

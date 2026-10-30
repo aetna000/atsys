@@ -128,6 +128,7 @@ export interface TaskConfig {
   argv: string[];
   resumeArgv: string[];
   model: string;
+  capacityFallbackModels?: string[];
   reasoningEffort: 'low' | 'medium' | 'high' | 'xhigh';
   validator: 'exit-code' | 'command' | 'benchmark-json';
   validationArgv: string[];
@@ -276,6 +277,7 @@ export interface OperationsState {
     heartbeatAt: string;
     startedAt: string;
     providerProtocol?: 1;
+    capacityProtocol?: 1;
     hookProtocol?: 1;
     pauseProtocol?: 1;
   } | null;

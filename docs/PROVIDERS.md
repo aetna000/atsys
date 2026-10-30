@@ -1,7 +1,7 @@
 # Coding providers — 0.3.0
 
 AtSys supports Codex, GitHub Copilot CLI and Claude Code as coding workers,
-read-only supervisors and bounded repair agents. The 0.3.0 beta extends the
+read-only supervisors and bounded repair agents. The 0.3.0 release extends the
 0.3.0b3 goal workflow with independent provider selection for each role.
 
 | Function | Codex | GitHub Copilot | Claude Code |
@@ -127,3 +127,49 @@ Verification uses deterministic fixture CLIs and real owned process groups,
 separate validators, report digests, denial/error handling and desktop/mobile
 configuration checks. This does not establish live model access. See
 [Spec Kit artifacts](../specs/008-provider-parity/spec.md).
+
+## Opt-in model capacity fallback
+
+For AtSys-managed Codex, Claude Code, or GitHub Copilot workers, configure an
+ordered list of model IDs supported by that same provider in the task JSON, plus
+a retry budget and restart or supervised recovery. The beta requires a healthy
+upgraded watchdog; restart an owned, idle watchdog with the upgraded package
+before submitting or changing a task that uses capacity fallback:
+
+```json
+{
+  "worker": "codex",
+  "model": "your-primary-model-id",
+  "capacityFallbackModels": ["your-approved-fallback-model-id"],
+  "recovery": "supervised",
+  "maxRetries": 2,
+  "backoffSeconds": 30
+}
+```
+
+The model IDs are examples and must be available to your account and chosen worker
+provider. Fallback selects a model within that provider; it does not switch
+providers. AtSys recognizes these structured worker errors:
+
+- Codex JSON `turn.failed` containing `Selected model is at capacity`, or JSON
+  `error` containing that message when the process exits unsuccessfully.
+- Claude JSON `error` with `overloaded_error`, or an error/result record that
+  explicitly reports the model is at capacity or overloaded.
+- Copilot JSON `session.error` explicitly reporting the model is at capacity or
+  overloaded. Generic rate limits, quota and authentication errors do not switch.
+
+After confirmed cleanup AtSys schedules a fresh worker attempt with the next
+approved model, records the switch, and applies the existing retry budget,
+deadline and validator. It does not wait indefinitely; exhaustion requires
+operator attention. The original task configuration is not rewritten. The
+fallback policy bypasses model-based supervisor diagnosis for these recognized
+failures.
+
+A new attempt is not a resumed native session: it receives the objective and
+prior attempt evidence and uses the existing workspace. Review tasks with external
+side effects before enabling automatic retries; AtSys cannot guarantee safe replay.
+This does not control a separately launched interactive Codex session. Other
+provider errors, different message formats, a process that never terminates, and
+unavailable fallback models may require attention. Fixture tests do not establish
+that real provider capacity responses use these event shapes, and other forms
+may require attention. Provider CLI versions and error formats can change.

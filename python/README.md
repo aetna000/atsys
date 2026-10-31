@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.3.0
+pip install --upgrade atsys==0.3.2
 cd /path/to/your/project
 atsys init
 ```
@@ -73,9 +73,9 @@ Native callbacks have provider-specific event limits. See `docs/PROVIDERS.md` an
 `docs/releases/v0.3.0.md`. Restart an owned idle watchdog with the upgraded
 package before submitting new provider tasks; do not replace active runners.
 
-## Capacity recovery beta
+## Capacity recovery and watch progress
 
-AtSys 0.3.1b1 adds opt-in capacity fallback for managed Codex, Claude Code and
-Copilot workers. Install explicitly with `pip install --upgrade atsys==0.3.1b1`.
-See `docs/releases/v0.3.1b1.md` and `docs/PROVIDERS.md` for configuration,
-watchdog upgrade and limits.
+AtSys 0.3.2 displays the task's reported checkpoint in the terminal watch. It
+includes opt-in capacity fallback for managed Codex, Claude Code and Copilot
+workers, introduced in 0.3.1b1. See `docs/releases/v0.3.2.md` and
+`docs/PROVIDERS.md` for configuration, watchdog upgrade and limits.

@@ -116,6 +116,13 @@ class TerminalRenderingTests(unittest.TestCase):
             self.assertIn(f"Milestone {i}", output)
         self.assertIn("Progress file", output)
 
+    def test_live_overview_shows_reported_checkpoint_with_milestones(self):
+        value = task()
+        value["progress"]["checkpoint"] = "10/600 graded: 9 passed, 1 failed"
+        for width, height in [(80, 24), (120, 40)]:
+            output = self.render(live_layout(value, width, height), width, height)
+            self.assertIn("10/600 graded: 9 passed, 1 failed", output)
+
     def test_full_status_preserves_provenance_and_does_not_render_user_markup(self):
         value = task()
         value["name"] = "[red]literal name[/red]\x1b[2J"

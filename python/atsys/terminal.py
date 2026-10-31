@@ -156,14 +156,19 @@ def milestone_panel(task: dict, *, compact: bool = False, max_items: int = 100):
             ),
         )
     heading = f"{progress['completed']}/{progress['total']} reported · validator still decides completion"
+    checkpoint = progress.get("checkpoint")
     body = (
         Group(
+            *([text(f"Progress: {checkpoint}", "bold", compact=compact)] if checkpoint else []),
             text(reporter, "dim", compact=compact),
             text(explanation, compact=compact),
             table,
         )
         if plan
-        else Group(text(reporter, "dim"), text(explanation))
+        else Group(
+            *([text(f"Progress: {checkpoint}", "bold", compact=compact)] if checkpoint else []),
+            text(reporter, "dim"), text(explanation)
+        )
     )
     return Panel(
         body,
@@ -296,14 +301,14 @@ def live_layout(
         return layout
     if view == "overview" and height >= 18:
         plan_height = (
-            min(len(task.get("milestones", [])) + 4, height - 11)
+            min(len(task.get("milestones", [])) + 5, height - 11)
             if task.get("milestones")
             else min(6, height - 11)
         )
         layout.split_column(
             Layout(header, size=4),
             Layout(
-                milestone_panel(task, compact=True, max_items=max(1, plan_height - 4)),
+                milestone_panel(task, compact=True, max_items=max(1, plan_height - 5)),
                 size=plan_height,
             ),
             Layout(

@@ -11,7 +11,7 @@ The benchmark failure motivated this project; benchmarks are not its domain mode
 Install the Python release (Python 3.10+):
 
 ```sh
-python -m pip install --upgrade atsys==0.3.0
+python -m pip install --upgrade atsys==0.3.2
 cd /path/to/your/project
 atsys init
 ```
@@ -26,15 +26,14 @@ The packaged skill handles repository inspection, planning, task configuration, 
 
 `atsys init` installs the project skill, starts the macOS watchdog service and launches the bundled dashboard. `atsys ui` opens it again; `atsys task list` shows managed work. The dashboard starts at **http://127.0.0.1:4310**, choosing another free port if a different instance is there. Always use the reported URL. Installed state lives in `~/.local/share/atsys`, independent of the package and repository. `ATSYS_DATA_DIR` overrides it.
 
-The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.0 on PyPI](https://pypi.org/project/atsys/0.3.0/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.0) and [release notes](docs/releases/v0.3.0.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
+The wheel includes the backend and dashboard; its Python dependency supplies Node 24. No npm or source checkout is required at runtime. Codex CLI and its existing login are needed for Codex workers, supervisors and repairs. See [AtSys 0.3.2 on PyPI](https://pypi.org/project/atsys/0.3.2/), the [GitHub release](https://github.com/aetna000/atsys/releases/tag/v0.3.2) and [release notes](docs/releases/v0.3.2.md). See [packaging, verification and release instructions](docs/PACKAGING.md).
 
-## Beta: model capacity fallback
+## New in 0.3.2
 
-AtSys 0.3.1b1 adds opt-in model capacity recovery for managed Codex, Claude Code,
-and GitHub Copilot workers. Install explicitly with `python -m pip install --upgrade
-atsys==0.3.1b1`; see [beta release notes](docs/releases/v0.3.1b1.md) for
-configuration, watchdog upgrade requirements and important limits. Stable remains
-0.3.0.
+The terminal watch shows reported checkpoint text, including live pass/fail counts
+when the task reports them. This release also promotes the opt-in model capacity
+recovery introduced in 0.3.1b1. See the [release notes](docs/releases/v0.3.2.md)
+for configuration, watchdog upgrade requirements and limits.
 
 ## New in 0.3.0b3
 

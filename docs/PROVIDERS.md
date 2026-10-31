@@ -132,7 +132,7 @@ configuration checks. This does not establish live model access. See
 
 For AtSys-managed Codex, Claude Code, or GitHub Copilot workers, configure an
 ordered list of model IDs supported by that same provider in the task JSON, plus
-a retry budget and restart or supervised recovery. The beta requires a healthy
+a retry budget and restart or supervised recovery. This feature requires a healthy
 upgraded watchdog; restart an owned, idle watchdog with the upgraded package
 before submitting or changing a task that uses capacity fallback:
 

@@ -4277,3 +4277,36 @@ h4 {
   color: var(--accent);
   border-color: #ffffff;
 }
+
+/* AtMem.ai lockup shared with the website and the other AtMem.ai apps. */
+.brand {
+  font-family: Manrope, 'DM Sans', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  gap: 10px;
+}
+.atmem-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: currentColor;
+}
+.atmem-dot {
+  fill: #5fd0d6;
+}
+:root:not([data-theme='dark']) .atmem-dot {
+  fill: #1f777c;
+}
+.sidebar .brand > .brand-text:nth-child(2) > span {
+  display: block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-top: 4px;
+  color: #a9babc;
+}
+:root:not([data-theme='dark']) .sidebar .brand > .brand-text:nth-child(2) > span {
+  color: var(--muted);
+}

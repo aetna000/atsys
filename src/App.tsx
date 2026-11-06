@@ -26,6 +26,30 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-route
 import { makeTheme } from './theme';
 import { VERSION } from '../shared/version';
 import { Tasks } from './pages/Tasks';
+// The AtMem.ai mark, same artwork as atmem.ai/brand/icon-on-light.svg.
+// Ink follows currentColor; the dot follows the theme (see .atmem-dot).
+function AtmemMark() {
+  return (
+    <svg className="atmem-mark" viewBox="-154.35 -151.35 308.7 308.7" aria-hidden="true">
+      <g transform="translate(0 2)">
+        <path
+          d="M-91.7 74.24 L0 -88 L91.7 74.24 M-66.7 30 H66.7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="26"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M-142 96a38 38 0 1 0 76 0a38 38 0 1 0 -76 0ZM-116 96a12 12 0 1 0 24 0a12 12 0 1 0 -24 0ZM66 96a38 38 0 1 0 76 0a38 38 0 1 0 -76 0ZM92 96a12 12 0 1 0 24 0a12 12 0 1 0 -24 0Z"
+          fill="currentColor"
+          fillRule="evenodd"
+        />
+        <circle className="atmem-dot" cx="0" cy="-88" r="40" />
+      </g>
+    </svg>
+  );
+}
+
 export default function App() {
   const [search, setSearch] = useState('');
   const [mobile, setMobile] = useState(false);
@@ -76,11 +100,9 @@ export default function App() {
         )}
         <aside className={`sidebar ${mobile ? 'open' : ''}`}>
           <Link to="/" className="brand">
-            <div className="brand-symbol">
-              <span />Λ
-            </div>
-            <div>
-              AtSys<span>AGENT CONTROL PLANE</span>
+            <AtmemMark />
+            <div className="brand-text">
+              AtMem.ai<span>Agent supervision · AtSys</span>
             </div>
             <span className="version">v{VERSION}</span>
           </Link>

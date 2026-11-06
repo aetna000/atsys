@@ -2,6 +2,8 @@
 
 AtSys supervises general coding tasks. The first console milestone and the second operational milestone are documented separately; current implementation is described in [the verification report](IMPLEMENTATION.md).
 
+**Next planned feature release: [0.4.0 interactive agent supervision](releases/v0.4.0-plan.md).** Cover policy-bound routine approvals, durable capacity/timeout recovery, automatic low-impact decisions and visible terminal takeover for Codex and Claude. This is planned work, not shipped functionality.
+
 **Current priority: [testing and qualification](TESTING.md).** Codex plugin packaging and official directory submission are [saved as a deferred TODO](todos/codex-plugin.md).
 
 The goal-oriented setup/recovery increment is described in [goal supervision](GOAL-SUPERVISION.md)

@@ -31,12 +31,18 @@ test('product navigation exposes operational tasks and settings at desktop and m
 });
 test('task search, theme and help controls work and persist', async ({ page }, info) => {
   await page.goto('/');
+  await expect(page.locator('.atmem-dot').first()).toHaveCSS('fill', 'rgb(243, 162, 180)');
   await page.getByLabel('Search managed tasks').fill('no task can have this unusual name');
   await expect(page.getByRole('heading', { name: 'No matching tasks' })).toBeVisible();
   await page.getByLabel('Search managed tasks').fill('');
   await page.getByRole('button', { name: 'Use dark theme' }).click();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Use light theme' })).toBeVisible();
+  await expect(page.locator('.atmem-dot').first()).toHaveCSS('fill', 'rgb(243, 162, 180)');
+  await page.screenshot({
+    path: `test-results/pink-dark-${info.project.name}.png`,
+    fullPage: true,
+  });
   if (info.project.name === 'desktop')
     await page.screenshot({ path: 'docs/screenshots/tasks-dark.png', fullPage: true });
   await page.getByRole('button', { name: 'Use light theme' }).click();

@@ -13,9 +13,9 @@
   --ink: #172033;
   --muted: #5f6a7c;
   --line: #e1e7ef;
-  --subtle: #f2f8f6;
-  --accent: #1f777c;
-  --green: #1f777c;
+  --subtle: #fdf4f7;
+  --accent: #8b3650;
+  --green: #8b3650;
   --sidebar: #172033;
   --shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 24px rgba(23, 32, 51, 0.05);
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
@@ -27,8 +27,8 @@
   --muted: #a9babc;
   --line: #2c3538;
   --subtle: #151a1c;
-  --accent: #5fd0d6;
-  --green: #5fd0d6;
+  --accent: #f3a2b4;
+  --green: #f3a2b4;
   --shadow: none;
   color-scheme: dark;
 }
@@ -297,12 +297,12 @@ select option {
 }
 .nav-group a:hover,
 .settings-link:hover {
-  background: #ffffff06;
-  color: #e7f1f2;
+  background: #38212b;
+  color: #f8bdcc;
 }
 .nav-group a.active {
-  background: #ccdbaa12;
-  color: #b9e8ea;
+  background: #38212b;
+  color: #f3a2b4;
 }
 .nav-group a.active:before {
   content: '';
@@ -310,11 +310,11 @@ select option {
   left: -12px;
   width: 3px;
   height: 19px;
-  background: #95d5d8;
+  background: #f3a2b4;
   border-radius: 0 2px 2px 0;
 }
 .nav-group a.active svg {
-  color: #b8e7e9;
+  color: #f3a2b4;
   opacity: 1;
 }
 .nav-count {
@@ -322,8 +322,8 @@ select option {
   font-family: var(--mono);
   font-size: 9px;
   font-weight: 500;
-  background: #a5be7229;
-  color: #a2d5d8;
+  background: #38212b;
+  color: #f3a2b4;
   padding: 2px 6px;
   border-radius: 4px;
   min-width: 19px;
@@ -4180,7 +4180,7 @@ h4 {
   border-right-color: transparent;
 }
 .ops-dot.healthy {
-  background: var(--accent);
+  background: #548548;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 :root:not([data-theme='dark']) {
@@ -4227,7 +4227,7 @@ h4 {
   border-radius: 12px;
 }
 :root:not([data-theme='dark']) .workspace-avatar {
-  background: #e8f5f2;
+  background: #fcecf1;
   color: var(--accent);
   border-color: transparent;
 }
@@ -4247,7 +4247,7 @@ h4 {
 }
 :root:not([data-theme='dark']) .nav-group a.active,
 :root:not([data-theme='dark']) .settings-link.active {
-  background: #e8f5f2;
+  background: #fcecf1;
   color: var(--accent);
   font-weight: 600;
 }
@@ -4258,7 +4258,7 @@ h4 {
   background: var(--accent);
 }
 :root:not([data-theme='dark']) .nav-count {
-  background: #e8f5f2;
+  background: #fcecf1;
   color: var(--accent);
 }
 :root:not([data-theme='dark']) .local-note {
@@ -4273,7 +4273,7 @@ h4 {
   border-top-color: var(--line);
 }
 :root:not([data-theme='dark']) .operator-avatar {
-  background: #e8f5f2;
+  background: #fcecf1;
   color: var(--accent);
   border-color: #ffffff;
 }
@@ -4293,10 +4293,10 @@ h4 {
   color: currentColor;
 }
 .atmem-dot {
-  fill: #5fd0d6;
+  fill: #f3a2b4;
 }
 :root:not([data-theme='dark']) .atmem-dot {
-  fill: #1f777c;
+  fill: #f3a2b4;
 }
 .sidebar .brand > .brand-text:nth-child(2) > span {
   display: block;

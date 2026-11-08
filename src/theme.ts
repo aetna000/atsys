@@ -3,7 +3,7 @@ export const makeTheme = (dark: boolean) =>
   createTheme({
     palette: {
       mode: dark ? 'dark' : 'light',
-      primary: { main: dark ? '#5fd0d6' : '#1f777c' },
+      primary: { main: dark ? '#F3A2B4' : '#8b3650' },
       success: { main: '#548548' },
       warning: { main: '#ac7b27' },
       error: { main: '#be5550' },
@@ -20,7 +20,14 @@ export const makeTheme = (dark: boolean) =>
     components: {
       MuiButton: {
         defaultProps: { disableElevation: true },
-        styleOverrides: { root: { borderRadius: 12, minHeight: 36, padding: '7px 14px' } },
+        styleOverrides: {
+          root: { borderRadius: 12, minHeight: 36, padding: '7px 14px' },
+          containedPrimary: {
+            backgroundColor: '#F3A2B4',
+            color: '#172033',
+            '&:hover': { backgroundColor: '#f8bdcc' },
+          },
+        },
       },
       MuiDialog: { styleOverrides: { paper: { backgroundImage: 'none' } } },
       MuiDrawer: { styleOverrides: { paper: { backgroundImage: 'none' } } },

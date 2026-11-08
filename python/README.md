@@ -3,7 +3,7 @@
 Installable supervision for general coding work: features, bug fixes, refactors, tests, builds, migrations and scripts.
 
 ```sh
-pip install --upgrade atsys==0.3.3
+pip install --upgrade atsys==0.3.4
 cd /path/to/your/project
 atsys init
 ```
